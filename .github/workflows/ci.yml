@@ -1,0 +1,116 @@
+# =============================================================================
+# CI - Integrazione continua
+# =============================================================================
+# Gira su OGNI pull request verso `develop` o `main` e su ogni push su quei
+# branch. Una PR si puo' fare merge solo se questo workflow e' verde
+# (regola impostata nella branch protection di GitHub).
+#
+# Cosa controlla, in ordine:
+#   1. formattazione del codice (dart format)
+#   2. analisi statica (flutter analyze, regole in analysis_options.yaml)
+#   3. test automatici con misura della coverage (flutter test --coverage)
+#   4. che l'app compili davvero (build web)
+#
+# Se la CI fallisce: aprite il job rosso nella tab "Checks" della PR, leggete
+# l'errore, correggete in locale (stessi comandi riportati sotto) e fate un
+# nuovo push sullo stesso branch: la CI ripartira' da sola.
+# =============================================================================
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  # Permette di rilanciare la CI a mano dalla tab "Actions".
+  workflow_dispatch:
+
+# Se fate due push di fila sulla stessa PR, il run vecchio viene annullato:
+# inutile sprecare minuti di CI su un commit gia' superato.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Il workflow legge solo il codice: nessun permesso di scrittura.
+permissions:
+  contents: read
+
+env:
+  # Versione di Flutter fissata: tutti (CI e team) devono usare la stessa,
+  # altrimenti formattazione e lint possono dare risultati diversi.
+  FLUTTER_VERSION: "3.47.0"
+
+jobs:
+  analyze-and-test:
+    name: Formattazione, analisi e test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v7
+
+      - name: Installa Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          # Cache dell'SDK e dei pacchetti: le run successive sono piu' veloci.
+          cache: true
+
+      - name: Scarica le dipendenze
+        run: flutter pub get
+
+      # In locale: `dart format .` (corregge da solo i file).
+      - name: Controlla la formattazione
+        run: dart format --output=none --set-exit-if-changed .
+
+      # In locale: `flutter analyze`.
+      - name: Analisi statica
+        run: flutter analyze
+
+      # In locale: `flutter test --coverage`.
+      - name: Test con coverage
+        run: flutter test --coverage
+
+      # Calcola la percentuale di righe coperte dai test leggendo lcov.info
+      # (LF = righe trovate, LH = righe eseguite) e la scrive nel riepilogo
+      # del run, visibile nella pagina del workflow su GitHub.
+      - name: Riepilogo coverage
+        run: |
+          if [ -f coverage/lcov.info ]; then
+            awk -F: '/^LF:/ {lf+=$2} /^LH:/ {lh+=$2}
+              END { pct = (lf > 0) ? lh*100/lf : 0;
+                    printf "### Coverage dei test: %.1f%% (%d/%d righe)\n", pct, lh, lf }' \
+              coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Salva il report di coverage come artifact scaricabile (utile per il
+      # Test Summary Report).
+      - name: Carica il report di coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: ignore
+
+  build-web:
+    name: Build web
+    # Parte solo se analisi e test sono passati: inutile compilare codice
+    # che non supera i controlli.
+    needs: analyze-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # Verifica che l'app compili in modalita' release.
+      - name: Compila l'app web
+        run: flutter build web --release

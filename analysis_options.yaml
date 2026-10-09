@@ -1,0 +1,38 @@
+# Configurazione dell'analizzatore statico di Dart (`flutter analyze`).
+#
+# La CI fallisce se l'analizzatore trova errori, warning o "info": scrivere
+# codice pulito non e' facoltativo. Se una regola vi sembra sbagliata per un
+# caso specifico, si discute in PR e si silenzia solo quella riga con
+# `// ignore: nome_regola` spiegando il perche' in un commento.
+
+# Set di regole raccomandate dal team di Flutter.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # Codice generato o di piattaforma: non lo scriviamo noi.
+    - build/**
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+
+linter:
+  rules:
+    # Una Future non attesa e' un bug silenzioso (errori persi, ordine delle
+    # operazioni diverso da quello che si legge). In un'app che parla quasi
+    # solo con Supabase e' la regola piu' utile. Se il "fire and forget" e'
+    # voluto, va reso esplicito con `unawaited(...)`.
+    - unawaited_futures
+
+    # Stream e subscription non chiusi in dispose() continuano a girare
+    # (memory leak e crash su widget gia' distrutti).
+    - cancel_subscriptions
+    - close_sinks
+
+    # Preferire le virgolette singole, come da convenzione Dart.
+    - prefer_single_quotes

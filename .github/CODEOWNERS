@@ -1,0 +1,12 @@
+# CODEOWNERS: chi viene aggiunto automaticamente come revisore di una PR in
+# base ai file modificati. Con la branch protection "Require review from Code
+# Owners" la loro approvazione diventa obbligatoria.
+#
+# I documenti (docs/) devono sempre essere approvati dai Project Manager.
+# TODO(PM): aggiungere lo username GitHub di Renato Mancino accanto a quello
+# di Mario Celzo.
+/docs/ @mariocelzo
+
+# Anche le pipeline CI/CD sono di competenza dei PM: una modifica sbagliata
+# qui disattiverebbe i controlli per tutti.
+/.github/ @mariocelzo

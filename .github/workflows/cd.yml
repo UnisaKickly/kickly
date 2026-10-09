@@ -1,0 +1,107 @@
+# =============================================================================
+# CD - Rilascio continuo
+# =============================================================================
+# Gira a ogni push su `main`, cioe' quando il team fa il merge di una release
+# da `develop` a `main` (vedi CONTRIBUTING.md, sezione "Rilasci").
+#
+# Produce due cose:
+#   1. la versione web dell'app pubblicata su GitHub Pages
+#      (https://<organizzazione>.github.io/<repo>/), da mostrare alla demo;
+#   2. un APK Android scaricabile dalla pagina del run (sezione "Artifacts"),
+#      da installare sui telefoni per i test.
+#
+# Prerequisito (una volta sola, lo fanno i PM): Settings -> Pages ->
+# Source = "GitHub Actions".
+# =============================================================================
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Un solo deploy alla volta; un deploy in corso non viene interrotto a meta'.
+concurrency:
+  group: cd-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.47.0"
+
+jobs:
+  build-web:
+    name: Build web per GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # Su GitHub Pages l'app non sta nella radice del dominio ma in
+      # /<nome-repo>/: --base-href dice a Flutter dove trovare i suoi file.
+      - name: Compila l'app web
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Prepara l'artifact per Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/web
+
+  deploy-web:
+    name: Pubblica su GitHub Pages
+    needs: build-web
+    runs-on: ubuntu-latest
+    # Permessi minimi richiesti da GitHub Pages per pubblicare.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+  build-android:
+    name: Build APK Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Gradle (il sistema di build Android) richiede Java.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      # APK firmato con la chiave di debug: va bene per installarlo sui
+      # telefoni del team, NON per pubblicarlo sul Play Store.
+      - name: Compila l'APK
+        run: flutter build apk --release
+
+      - name: Carica l'APK come artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: kickly-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
