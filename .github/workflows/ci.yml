@@ -41,6 +41,37 @@ env:
   FLUTTER_VERSION: "3.47.0"
 
 jobs:
+  # Controlla che il branch della PR rispetti la regola del progetto
+  # (CONTRIBUTING.md, sezione 1): <tipo>/KCK-<numero>-<quello che vuoi>.
+  # La chiave Jira nel nome serve a GitHub for Atlassian per collegare
+  # branch, commit e PR al ticket. Sui push (non PR) il job viene saltato.
+  branch-name:
+    name: Nome del branch
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verifica il nome del branch
+        env:
+          # Passato via env e non interpolato nello script: il nome del branch
+          # e' scelto da chi apre la PR, quindi non e' un input fidato.
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          # Eccezioni: la PR di release settimanale (develop -> main) e le PR
+          # automatiche di Dependabot.
+          if [ "$BRANCH" = "develop" ] || [[ "$BRANCH" == dependabot/* ]]; then
+            echo "Branch '$BRANCH': eccezione ammessa."
+            exit 0
+          fi
+          # Tipo + chiave Jira obbligatori; dopo la chiave, un separatore e
+          # poi qualsiasi descrizione (oppure niente).
+          if [[ "$BRANCH" =~ ^(feature|fix|chore|docs)/KCK-[0-9]+([-_].*)?$ ]]; then
+            echo "Branch '$BRANCH': nome valido."
+          else
+            echo "::error::Il branch '$BRANCH' non rispetta la regola <tipo>/KCK-<numero>-<descrizione> (tipo: feature, fix, chore, docs). Vedi CONTRIBUTING.md, sezione 1, e la sezione 7 per rinominarlo."
+            exit 1
+          fi
+
   analyze-and-test:
     name: Formattazione, analisi e test
     runs-on: ubuntu-latest
