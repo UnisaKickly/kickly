@@ -1,8 +1,8 @@
 # =============================================================================
 # CD - Rilascio continuo
 # =============================================================================
-# Gira a ogni push su `main`, cioe' quando il team fa il merge di una release
-# da `develop` a `main` (vedi CONTRIBUTING.md, sezione "Rilasci").
+# Gira a ogni push su `main`, cioe' quando ogni mercoledi' si fa il merge della
+# release settimanale da `develop` a `main` (vedi CONTRIBUTING.md, sezione 5).
 #
 # Produce due cose:
 #   1. la versione web dell'app pubblicata su GitHub Pages

@@ -1,7 +1,7 @@
 # Documentazione di Kickly
 
 Tutti i documenti del progetto si scrivono qui, in Markdown, e passano da pull
-request come il codice (vedi [CONTRIBUTING.md](../CONTRIBUTING.md), sezione 5).
+request come il codice (vedi [CONTRIBUTING.md](../CONTRIBUTING.md), sezione 6).
 Le PR che toccano `docs/` richiedono sempre l'approvazione dei Project Manager.
 
 Per iniziare un nuovo documento copia [`_TEMPLATE.md`](_TEMPLATE.md).
