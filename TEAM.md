@@ -7,4 +7,4 @@ provare tutto il flusso: branch → commit → push → PR → review → merge.
 | Nome e cognome | Username GitHub | Email istituzionale | Ruolo/i nel team |
 |---|---|---|---|
 | Mario Celzo | @mariocelzo | m.celzo@studenti.unisa.it | Project Manager |
-| Renato Mancino | | r.mancino10@studenti.unisa.it | Project Manager |
+| Renato Mancino | @renatomancino | r.mancino10@studenti.unisa.it | Project Manager |
