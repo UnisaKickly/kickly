@@ -2,11 +2,12 @@
 # base ai file modificati. Con la branch protection "Require review from Code
 # Owners" la loro approvazione diventa obbligatoria.
 #
+# Con piu' owner sulla stessa riga basta l'approvazione di UNO dei due PM
+# (Mario Celzo o Renato Mancino).
+
 # I documenti (docs/) devono sempre essere approvati dai Project Manager.
-# TODO(PM): aggiungere lo username GitHub di Renato Mancino accanto a quello
-# di Mario Celzo.
-/docs/ @mariocelzo
+/docs/ @mariocelzo @renatomancino
 
 # Anche le pipeline CI/CD sono di competenza dei PM: una modifica sbagliata
 # qui disattiverebbe i controlli per tutti.
-/.github/ @mariocelzo
+/.github/ @mariocelzo @renatomancino
