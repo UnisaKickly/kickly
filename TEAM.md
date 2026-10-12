@@ -10,3 +10,4 @@ provare tutto il flusso: branch → commit → push → PR → review → merge.
 | Renato Mancino | @renatomancino | r.mancino10@studenti.unisa.it | Project Manager |
 | Simona Sceral | @sceraaal | s.sceral@studenti.unisa.it | Developer |
 | Gabriele Karol Vicinanza  | @Gabrzz | g.vicinanza24@studenti.unisa.it | Developer |
+| Giuseppe Sarlo  | @G-Sarlo | g.sarlo2@studenti.unisa.it | Developer |
