@@ -8,3 +8,4 @@ provare tutto il flusso: branch → commit → push → PR → review → merge.
 |---|---|---|---|
 | Mario Celzo | @mariocelzo | m.celzo@studenti.unisa.it | Project Manager |
 | Renato Mancino | @renatomancino | r.mancino10@studenti.unisa.it | Project Manager |
+| Pietro Senatore | @Bistroh | p.senatore32@studenti.unisa.it | Developer |
