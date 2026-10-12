@@ -11,4 +11,4 @@ provare tutto il flusso: branch → commit → push → PR → review → merge.
 | Antonio Tolino | @Antonio-T-5 | a.tolino@studenti.unisa.it | Developer |
 | Pietro Senatore | @Bistroh | p.senatore32@studenti.unisa.it | Developer |
 | Simona Sceral | @sceraaal | s.sceral@studenti.unisa.it | Developer |
-| Gabriele Karol Vicinanza  | @Gabrzz | g.vicinanza24@studenti.unisa.it | Developer |
+| Gabriele Karol Vicinanza  | @Gabrzzz | g.vicinanza24@studenti.unisa.it | Developer |
