@@ -23,7 +23,7 @@ KCK-
 
 ## Checklist
 
-- [ ] Il branch parte da `develop` e la PR punta a `develop`
+- [ ] Il branch si chiama `<tipo>/KCK-<n>-...` (tipo: feature, fix, chore, docs), parte da `develop` e la PR punta a `develop`
 - [ ] Il titolo della PR inizia con la chiave Jira (es. `KCK-12: login con email`)
 - [ ] `dart format .`, `flutter analyze` e `flutter test` passano in locale
 - [ ] Ho aggiunto/aggiornato i test (se ho scritto codice)

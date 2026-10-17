@@ -1,0 +1,80 @@
+# =============================================================================
+# Release settimanale - apre la PR develop -> main ogni mercoledi'
+# =============================================================================
+# Regola del progetto (CONTRIBUTING.md, sezione 5): durante la settimana il
+# lavoro finito confluisce in `develop`; ogni mercoledi' `develop` viene unito
+# in `main` e la CD pubblica la nuova versione.
+#
+# Questo workflow automatizza solo la parte noiosa: APRE la pull request di
+# release. L'approvazione e il merge restano a un PM (branch protection), con
+# "Create a merge commit" (mai squash, altrimenti develop e main divergono).
+#
+# Non apre nulla se:
+#   - `develop` non ha commit nuovi rispetto a `main`;
+#   - esiste gia' una PR develop -> main aperta (es. quella della settimana
+#     prima non ancora mergiata).
+#
+# Nota tecnica: le PR create con il GITHUB_TOKEN non fanno partire altri
+# workflow. Non e' un problema: i controlli obbligatori della PR girano gia'
+# sul push in `develop` (stesso commit), quindi la PR li trova verdi.
+# Prerequisito (una volta sola): Settings -> Actions -> General ->
+# "Allow GitHub Actions to create and approve pull requests".
+# =============================================================================
+name: Release settimanale
+
+on:
+  schedule:
+    # Ogni mercoledi' alle 07:00 UTC = 9:00 in Italia con l'ora legale,
+    # 8:00 con l'ora solare (cron di GitHub lavora solo in UTC).
+    - cron: "0 7 * * 3"
+  # Permette ai PM di lanciarlo a mano dalla tab "Actions" (es. release
+  # straordinaria prima di una demo).
+  workflow_dispatch:
+
+# Permessi minimi: leggere il codice e creare la PR.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-release-pr:
+    name: Apri la PR di release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Controlla se c'e' qualcosa da rilasciare
+        id: check
+        run: |
+          # Quanti commit ha develop in piu' rispetto a main?
+          ahead=$(gh api "repos/$REPO/compare/main...develop" --jq '.ahead_by')
+          # Esiste gia' una PR di release aperta?
+          open=$(gh pr list -R "$REPO" --base main --head develop --state open --json number --jq 'length')
+          echo "Commit nuovi su develop: $ahead - PR di release gia' aperte: $open"
+          if [ "$ahead" -gt 0 ] && [ "$open" -eq 0 ]; then
+            echo "create=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "create=false" >> "$GITHUB_OUTPUT"
+            echo "Niente da fare questa settimana." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Apri la PR develop -> main
+        if: steps.check.outputs.create == 'true'
+        run: |
+          today=$(date -u +%d/%m/%Y)
+          # Elenco dei commit inclusi (titolo + autore), dal piu' recente,
+          # cosi' il PM vede a colpo d'occhio cosa entra nel rilascio.
+          commits=$(gh api "repos/$REPO/compare/main...develop" \
+            --jq '.commits | reverse | .[] | "- " + (.commit.message | split("\n")[0]) + " (" + .commit.author.name + ")"')
+          body=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s\n' \
+            "Rilascio settimanale di \`develop\` in \`main\` (CONTRIBUTING.md, sezione 5)." \
+            "### Commit inclusi" \
+            "$commits" \
+            "" \
+            "**Per il PM:** controlla, approva e fai il merge con **Create a merge commit** (non squash). Dopo il merge la CD pubblica web e APK.")
+          gh pr create -R "$REPO" --base main --head develop \
+            --title "Release settimanale – $today" \
+            --body "$body"
+          echo "Aperta la PR di release del $today" >> "$GITHUB_STEP_SUMMARY"
