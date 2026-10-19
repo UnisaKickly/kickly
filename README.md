@@ -88,12 +88,20 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
 | S4 – Post-partita e pagamenti | 23–29 nov | MVP, classifica, notifiche, pagamento del campo |
 | S5 – Social, test e consegna | 30 nov – 6 dic | rete sociale, test report, manuali, presentazione |
 
-## CI/CD
+## CI/CD e rilasci
 
-- **CI** (`ci.yml`): su ogni PR verso `develop`/`main` controlla formattazione,
-  analisi statica, test con coverage e build web. Una PR rossa non si mergia.
+- **CI** (`ci.yml`): su ogni PR verso `develop`/`main` controlla il nome del
+  branch (`<tipo>/KCK-<n>-...`), formattazione, analisi statica, test con
+  coverage e build web. Una PR rossa non si mergia.
+- **Release settimanale** (`release.yml`): **ogni mercoledi'** apre in automatico
+  la PR `develop → main`; un PM la approva e fa il merge (merge commit).
 - **CD** (`cd.yml`): a ogni merge su `main` pubblica l'app web su GitHub Pages
   e produce un APK Android scaricabile dalla pagina del run.
+- **Jira ↔ GitHub**: con l'app GitHub for Atlassian, branch, commit e PR che
+  contengono la chiave del ticket (es. `KCK-60`) compaiono nel ticket Jira.
+  - *Come Verificare*: dopo aver fatto 'git push', apri il ticket su Jira e controlla il pannello **Sviluppo** sulla destra. 
+  - *Cosa fare se non compare*: verifica che la chiave del ticket sia scritta correttamente in maiuscolo con il trattino (es. 'KCK-101', non 'kck-101' o 'KCK101').
+  Se il nome del branch è errato, rinominalo seguendo [CONTRIBUTING.md]. (CONTRIBUTING.md sezione 7).
 
 ## Struttura del repository
 

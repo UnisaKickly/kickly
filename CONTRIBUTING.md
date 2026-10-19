@@ -14,19 +14,39 @@ tutta: ti evita il 90% dei problemi.
 
 | Branch | A cosa serve | Chi ci scrive |
 |---|---|---|
-| `main` | versione rilasciata e funzionante (demo, consegna) | solo merge da `develop` a fine sprint, fatto dai PM |
+| `main` | versione rilasciata e funzionante (demo, consegna) | solo il merge settimanale da `develop`, **ogni mercoledi'** (vedi sezione 5) |
 | `develop` | integrazione: qui confluisce il lavoro finito di tutti | solo tramite pull request approvate |
-| `feature/KCK-<n>-<descrizione>` | nuova funzionalita' dell'app | tu |
-| `docs/KCK-<n>-<descrizione>` | documento (RAD, SDD, WBS, report...) | tu |
-| `fix/KCK-<n>-<descrizione>` | correzione di un bug | tu |
-| `chore/KCK-<n>-<descrizione>` | configurazione, CI, dipendenze | tu |
+| `feature/KCK-<n>-...` | nuova funzionalita' dell'app | tu |
+| `fix/KCK-<n>-...` | correzione di un bug | tu |
+| `chore/KCK-<n>-...` | configurazione, CI, dipendenze, setup | tu |
+| `docs/KCK-<n>-...` | documento (RAD, SDD, WBS, report...) | tu |
 
-`KCK-<n>` e' la chiave del ticket Jira (la vedi in alto nel ticket, es.
-`KCK-12`). La descrizione e' breve, minuscola, con i trattini:
-`feature/KCK-12-login-email`, `docs/KCK-5-team-contract`.
+### La regola del nome del branch
 
-Mettere la chiave nel nome del branch serve: Jira collega in automatico branch,
-commit e PR al ticket, e i PM vedono a che punto sei senza chiedertelo.
+```
+<tipo>/KCK-<numero del ticket>-<quello che vuoi>
+```
+
+- **`<tipo>`** e' uno tra `feature`, `fix`, `chore`, `docs` (lo trovi anche nel
+  ticket, sezione "Come consegnare").
+- **`KCK-<numero>`** e' la chiave del ticket Jira che stai facendo, scritta
+  esattamente cosi' (maiuscolo, con il trattino). La vedi in alto nel ticket.
+- **dopo** un trattino scrivi quello che vuoi per ricordarti di cosa si
+  tratta (consiglio: minuscolo, parole separate da trattini, niente spazi).
+
+Esempi validi: `feature/KCK-60-login-email`, `fix/KCK-60-errore-password-vuota`,
+`chore/KCK-24-supabase`, `docs/KCK-27-team-contract`.
+Esempi **non** validi: `login` (manca tutto), `feature/login` (manca la chiave),
+`feature/kck-60-login` (chiave minuscola), `Feature/KCK-60` (tipo maiuscolo),
+`feature/KCK60-login` (manca il trattino nella chiave).
+
+**Perche' e' obbligatoria.** Grazie all'app *GitHub for Atlassian* (vedi
+sezione 3), la chiave nel nome del branch fa comparire in automatico branch,
+commit e pull request dentro il ticket Jira, nel pannello **Sviluppo**: i PM
+vedono a che punto sei senza chiedertelo e il tuo lavoro risulta tracciato.
+Per questo la CI ha un controllo **"Nome del branch"**: se il nome non rispetta
+la regola la PR diventa rossa e non si puo' fare il merge. Se succede, rinomina
+il branch (sezione 7, "Ho sbagliato il nome del branch").
 
 ---
 
@@ -123,7 +143,9 @@ Se il lavoro non e' finito ma vuoi un parere, apri la PR come **Draft**.
 
 ---
 
-## 3. Stati dei ticket su Jira
+## 3. Jira e GitHub collegati
+
+### Stati dei ticket
 
 ```
 Da fare  →  In corso  →  In revisione  →  Fatto
@@ -138,6 +160,24 @@ Da fare  →  In corso  →  In revisione  →  Fatto
 
 Un ticket fermo in **In corso** da piu' di 3 giorni va segnalato al daily scrum.
 
+### GitHub for Atlassian (il "ponte" tra Jira e GitHub)
+
+Sul Jira di Kickly e' installata l'app **GitHub for Atlassian** (in passato si
+chiamava *GitHub for Jira*), collegata all'organizzazione GitHub `UnisaKickly`.
+Cosa fa per te:
+
+- se la **chiave del ticket** (es. `KCK-60`) compare nel **nome del branch**,
+  nel **messaggio di commit** o nel **titolo della PR**, Jira la riconosce e
+  mostra branch, commit, PR e stato della CI nel pannello **Sviluppo** del
+  ticket;
+- dal pannello **Sviluppo** del ticket puoi anche creare il branch con un clic
+  ("Crea branch"): scegli `UnisaKickly/kickly`, base `develop`, e controlla che
+  il nome rispetti la regola della sezione 1.
+
+Per verificare che funzioni: dopo il primo `git push` apri il ticket su Jira e
+guarda il pannello **Sviluppo** a destra (puo' servire qualche minuto). Se il
+branch non compare, quasi sempre la chiave nel nome e' sbagliata.
+
 ---
 
 ## 4. Definition of Done
@@ -146,14 +186,39 @@ Un ticket e' **Fatto** solo se:
 
 - [ ] tutti i criteri di accettazione del ticket sono rispettati;
 - [ ] il lavoro e' in una PR mergiata in `develop`, con almeno 1 approvazione;
-- [ ] la CI e' verde (formattazione, analisi, test, build);
+- [ ] la CI e' verde (nome del branch, formattazione, analisi, test, build);
 - [ ] il codice nuovo ha i suoi test (unit o widget) e i commenti dove servono;
 - [ ] i documenti toccati (RAD/SDD/ODD/matrice di tracciabilita') sono aggiornati;
 - [ ] nessun segreto nel repository.
 
 ---
 
-## 5. Documenti
+## 5. Rilasci: ogni mercoledi' `develop` → `main`
+
+Durante la settimana tutto il lavoro finito confluisce in `develop` (tramite le
+vostre PR). **Ogni mercoledi'** si fa il rilascio: `develop` viene unito in
+`main`, e la CD pubblica la nuova versione web e l'APK Android.
+
+Come funziona, in pratica:
+
+1. **Mercoledi' alle 9:00** il workflow `Release settimanale` apre da solo una
+   PR `develop → main` intitolata "Release settimanale – <data>", con l'elenco
+   dei commit inclusi. Se `develop` non ha novita' rispetto a `main`, non apre
+   nulla.
+2. Un **PM** controlla la PR e la approva.
+3. Il merge si fa con **"Create a merge commit"**, **mai** con "Squash and
+   merge": lo squash creerebbe su `main` un commit diverso da quelli di
+   `develop` e i due branch divergerebbero a ogni rilascio.
+4. Dopo il merge parte la **CD**: app web su
+   https://unisakickly.github.io/kickly/ e APK tra gli *Artifacts* del run.
+
+Cosa significa per te: **entra nel rilascio del mercoledi' solo cio' che e'
+mergiato in `develop` entro martedi' sera.** Se vuoi che la tua funzionalita'
+sia nella demo della settimana, pianificati di conseguenza.
+
+---
+
+## 6. Documenti
 
 - Tutti i documenti vivono in [`docs/`](docs/README.md), in **Markdown**, cosi'
   passano dalle PR come il codice e i PM possono revisionarli riga per riga.
@@ -168,7 +233,18 @@ Un ticket e' **Fatto** solo se:
 
 ---
 
-## 6. Problemi comuni
+## 7. Problemi comuni
+
+**"Ho sbagliato il nome del branch" (il controllo "Nome del branch" e' rosso)**
+
+```bash
+git branch -m feature/KCK-60-login-email     # rinomina il branch locale in cui sei
+git push -u origin feature/KCK-60-login-email # pubblica quello col nome giusto
+git push origin --delete nome-sbagliato       # cancella su GitHub quello vecchio
+```
+
+La PR aperta col nome vecchio si chiude da sola quando cancelli il branch:
+aprine una nuova dal branch col nome giusto.
 
 **"Il mio branch e' indietro rispetto a develop" / conflitti nella PR**
 
@@ -196,7 +272,7 @@ hai provato e cosa vedi. Chiedere aiuto presto e' una cosa da professionisti.
 
 ---
 
-## 7. Usare un assistente AI (ChatGPT, Claude, Copilot...)
+## 8. Usare un assistente AI (ChatGPT, Claude, Copilot...)
 
 E' permesso e utile, a patto di **capire tutto quello che committi**: in review
 ti verra' chiesto di spiegarlo. Funziona meglio se gli dai contesto: incolla la
