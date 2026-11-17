@@ -77,7 +77,7 @@ c'e' "piano approvato da <nome>", branch `feature/KCK-<n>-issue<m>` e PR in bozz
 ## Documenti di riferimento (leggili solo quando servono)
 - `docs/rad/requisiti.md` requisiti, user story, tabella degli oggetti; `docs/rad/uc/` casi d'uso;
   `docs/rad/mockup/` mock-up UI_* e percorsi di navigazione
-- `docs/modelli/` class diagram, sequence, statechart (PlantUML); `docs/modelli/DECISIONI_RAD.md`
+- `docs/modelli/class_diagram_sdd.md` class diagram dell'SDD in testo e mappatura sul DB; `docs/modelli/` class diagram, sequence, statechart (PlantUML); `docs/modelli/DECISIONI_RAD.md`
   decisioni sui punti non coperti dal RAD
 - `docs/sdd/design_goals.md` design goal e trade-off; `docs/sdd/*.puml` component e deployment
 - `docs/test/` category partition e test frame
