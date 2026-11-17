@@ -78,7 +78,7 @@ servono solo per segnalare bug (modulo **Bug**).
 
 | Sintomo | Causa probabile | Dove guardare |
 |---|---|---|
-| Check "Nome del branch" rosso | Branch non nella forma `<tipo>/KCK-<n>-...` (es. i branch `copilot/...` creati dal Copilot coding agent) | CONTRIBUTING.md, sezione 7, per rinominarlo |
+| Check "Nome del branch" rosso | Branch non nella forma `<tipo>/KCK-<n>-...`; per i branch creati da un'IA (`codex/`, `claude/`, `copilot/`) manca la chiave all'inizio del titolo della PR (`KCK-<n>: ...`) | CONTRIBUTING.md, sezione 1; dopo aver corretto il titolo: Close / Reopen della PR o nuovo push |
 | Check "Controlli DG9" rosso | SDK Supabase/FCM/Stripe importato in presentation/domain | AGENTS.md, regole DG9 |
 | La CI non parte su una PR aperta da un bot o da Copilot | GitHub chiede l'approvazione prima di eseguire i workflow | Pulsante "Approve and run workflows" nella PR |
 | Merge bloccato con CI verde | Manca l'approvazione di un PM | Riquadro in fondo alla PR |

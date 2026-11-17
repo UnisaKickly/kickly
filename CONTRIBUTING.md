@@ -40,6 +40,14 @@ Esempi **non** validi: `login` (manca tutto), `feature/login` (manca la chiave),
 `feature/kck-60-login` (chiave minuscola), `Feature/KCK-60` (tipo maiuscolo),
 `feature/KCK60-login` (manca il trattino nella chiave).
 
+**Eccezione: branch creati da un'IA.** Se il branch lo crea un assistente IA
+collegato a GitHub (Codex, Claude, Copilot), il nome inizia con `codex/`,
+`claude/` o `copilot/` e non contiene la chiave: e' ammesso, ma allora il
+**titolo della PR** deve iniziare con la chiave del ticket, es.
+`KCK-235: crea partita` (e' il titolo che collega la PR a Jira). Se correggi il
+titolo dopo aver aperto la PR, chiudi e riapri la PR (Close / Reopen) oppure fai
+un nuovo push: il pulsante Re-run rilegge il titolo vecchio.
+
 **Perche' e' obbligatoria.** Grazie all'app *GitHub for Atlassian* (vedi
 sezione 3), la chiave nel nome del branch fa comparire in automatico branch,
 commit e pull request dentro il ticket Jira, nel pannello **Sviluppo**: i PM

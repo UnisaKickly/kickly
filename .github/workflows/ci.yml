@@ -59,6 +59,8 @@ jobs:
           # Passato via env e non interpolato nello script: il nome del branch
           # e' scelto da chi apre la PR, quindi non e' un input fidato.
           BRANCH: ${{ github.head_ref }}
+          # Anche il titolo e' scelto da chi apre la PR: passato via env.
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
           # Eccezioni: la PR di release settimanale (develop -> main) e le PR
           # automatiche di Dependabot.
@@ -66,12 +68,24 @@ jobs:
             echo "Branch '$BRANCH': eccezione ammessa."
             exit 0
           fi
+          # Branch creati dagli assistenti IA collegati a GitHub (Codex, Claude,
+          # Copilot): il nome lo sceglie l'IA, quindi la chiave Jira deve stare
+          # all'inizio del TITOLO della PR ("KCK-<n>: ..."). GitHub for Atlassian
+          # collega la PR al ticket anche dal titolo.
+          if [[ "$BRANCH" =~ ^(codex|claude|copilot)/ ]]; then
+            if [[ "$TITLE" =~ ^KCK-[0-9]+:\  ]]; then
+              echo "Branch '$BRANCH' creato da un'IA, titolo con la chiave Jira: ammesso."
+              exit 0
+            fi
+            echo "::error::Il branch '$BRANCH' e' stato creato da un'IA: il titolo della PR deve iniziare con la chiave Jira, es. 'KCK-235: crea partita'. Correggi il titolo, poi chiudi e riapri la PR (Close / Reopen) oppure fai un nuovo push: il Re-run usa il titolo vecchio."
+            exit 1
+          fi
           # Tipo + chiave Jira obbligatori; dopo la chiave, un separatore e
           # poi qualsiasi descrizione (oppure niente).
           if [[ "$BRANCH" =~ ^(feature|fix|chore|docs)/KCK-[0-9]+([-_].*)?$ ]]; then
             echo "Branch '$BRANCH': nome valido."
           else
-            echo "::error::Il branch '$BRANCH' non rispetta la regola <tipo>/KCK-<numero>-<descrizione> (tipo: feature, fix, chore, docs). Vedi CONTRIBUTING.md, sezione 1, e la sezione 7 per rinominarlo."
+            echo "::error::Il branch '$BRANCH' non rispetta la regola <tipo>/KCK-<numero>-<descrizione> (tipo: feature, fix, chore, docs), oppure un branch codex/, claude/ o copilot/ con il titolo della PR che inizia con 'KCK-<n>: '. Vedi CONTRIBUTING.md, sezione 1, e la sezione 7 per rinominarlo."
             exit 1
           fi
 
