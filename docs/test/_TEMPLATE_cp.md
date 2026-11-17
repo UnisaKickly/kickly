@@ -1,6 +1,7 @@
 <!--
   Modello per la category partition di un caso d'uso.
-  1. Copia questo file in docs/test/cp_<UC>.md (es. cp_UC_PAR_1.md).
+  1. Copia questo file in docs/test/cp_<UC>.md o cp_<UC>_<UC>.md, come dice il ticket
+     (es. cp_UC_PAR_1_UC_PAG_1.md).
   2. Sostituisci i campi tra <...> e cancella le righe di esempio.
   3. Gli id dei frame seguono le regole di docs/test/README.md (TF_<AREA>_<nn>).
   Questo file non viene letto da scripts/tracciabilita.sh (non inizia con cp_).

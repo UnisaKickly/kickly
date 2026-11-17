@@ -1,6 +1,7 @@
 # Category partition e test frame (docs/test)
 
-Un file per caso d'uso: `cp_<UC>.md` (es. `cp_UC_PAR_1.md`), da copiare da
+Un file per caso d'uso o per coppia di casi d'uso, come indicato nel ticket Jira:
+`cp_<UC>.md` o `cp_<UC>_<UC>.md` (es. `cp_UC_PAR_1_UC_PAG_1.md`), da copiare da
 [`_TEMPLATE_cp.md`](_TEMPLATE_cp.md). Contiene parametri, categorie, scelte,
 vincoli (`[error]`, `[single]`, `[property ...]`, `[if ...]`) e la tabella dei
 test frame con l'esito atteso preso dal caso d'uso. I test frame sono decisi in
