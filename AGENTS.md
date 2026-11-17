@@ -70,11 +70,14 @@ dall'ambito approvato; PR compilata col template (RF/UC, artefatti, tentativi, e
 revisore, modifiche ai modelli); chi apre la PR sa spiegare ogni riga.
 
 ## Come si lavora con un agente (dettagli in `docs/pm/pipeline-agenti.md`)
-Su GitHub non ci sono agenti automatici: l'agente lavora in locale (Claude Code, Copilot nell'editor)
-o come Copilot coding agent, sempre su un ticket Jira e un branch `<tipo>/KCK-<n>-...` partito da `develop`.
-Ordine: piano (nessun file modificato) -> piano approvato -> implementazione -> un test per ogni TF ->
-controlli in locale -> revisore (`.claude/agents/revisore.md`) -> PR verso `develop` con il template.
-La CI e l'approvazione di un PM valgono per tutti allo stesso modo. Lo stato si segue su Jira.
+Su GitHub non ci sono agenti automatici: si usa qualsiasi assistente (Codex, Claude Code, Copilot...), in
+locale o collegato a GitHub, sempre su un ticket Jira e su un branch partito da `develop`
+(`<tipo>/KCK-<n>-...`; se il branch lo crea l'IA, il titolo della PR inizia con `KCK-<n>: `).
+Segui SOLO i passi e le verifiche del ticket. Ordine: piano (nessun file modificato) -> piano approvato ->
+implementazione -> verifiche del ticket (se ci sono test frame: un test per ogni TF) -> controlli in locale ->
+revisione -> PR verso `develop` con il template. La CI e l'approvazione di un PM valgono per tutti.
+Tester e revisore (`.claude/agents/tester.md`, `revisore.md`): in Claude Code sono agenti; con altre IA
+apri una sessione nuova e dai come prima istruzione il contenuto del file.
 
 ## Documenti di riferimento (leggili solo quando servono)
 - `docs/rad/requisiti.md` requisiti, user story, tabella degli oggetti; `docs/rad/uc/` casi d'uso;
@@ -83,5 +86,6 @@ La CI e l'approvazione di un PM valgono per tutti allo stesso modo. Lo stato si 
   decisioni sui punti non coperti dal RAD
 - `docs/sdd/design_goals.md` design goal e trade-off; `docs/sdd/*.puml` component e deployment
 - `docs/test/` category partition e test frame
-- `docs/fonti/` RAD v2.9 e SDD v1.0 originali (PDF): solo se il ticket li cita, altrimenti usa i file in `docs/`
+- `docs/fonti/` RAD v2.9 e SDD v1.0 originali (PDF): solo se il ticket li cita, altrimenti usa i file in `docs/`.
+  Diagrammi e mock-up nei PDF sono immagini: se non riesci a leggerli, chiedi di allegare le pagine
 - `CONTRIBUTING.md` flusso Git/Jira

@@ -34,7 +34,7 @@ KCK-
 - Piano approvato da:
 - Tentativi falliti prima del verde:
 - Agente interrotto o passato a una persona (si/no):
-- Esito dell'agente revisore (`.claude/agents/revisore.md`): <!-- incolla l'elenco delle differenze e come le hai risolte, oppure "nessuna differenza" -->
+- Esito del revisore (`.claude/agents/revisore.md`, con qualsiasi IA): <!-- incolla l'elenco delle differenze e come le hai risolte, oppure "nessuna differenza" -->
 
 ## Modifiche ai modelli
 

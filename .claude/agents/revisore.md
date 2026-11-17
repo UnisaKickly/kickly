@@ -14,3 +14,4 @@ Segnala inoltre: file fuori ambito, nuove dipendenze in pubspec.yaml, test esist
 modificati, test frame senza test, regole del caso d'uso non gestite.
 Per ogni differenza scrivi file, riga, cosa dice il modello e cosa fa il codice.
 Niente giudizi di stile. Se non trovi differenze, scrivilo.
+Non modificare nessun file: segnala soltanto.

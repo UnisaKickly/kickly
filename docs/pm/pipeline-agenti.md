@@ -7,16 +7,26 @@ persone in punti precisi. Le regole per gli agenti stanno in
 [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 **Niente agenti automatici su GitHub.** Il progetto non usa agenti che girano
-dentro GitHub Actions (richiederebbero una chiave API a pagamento). Gli agenti
-si usano:
+dentro GitHub Actions (richiederebbero una chiave API a pagamento). Ognuno usa
+l'assistente IA che preferisce, con il proprio account:
 
-- **in locale**, nell'editor o nel terminale (Claude Code, Copilot in VS Code,
-  altri assistenti): leggono `AGENTS.md` / `CLAUDE.md` e i file in `docs/`;
-- **come Copilot coding agent** su GitHub (incluso nel GitHub Student Developer
-  Pack): prepara l'ambiente con `.github/workflows/copilot-setup-steps.yml`.
+| Se usi | Consigliato | Note |
+|---|---|---|
+| ChatGPT | **Codex** | Legge `AGENTS.md` da solo |
+| Claude | **Claude Code** | Legge `CLAUDE.md` (che include `AGENTS.md`); tester e revisore sono agenti pronti |
+| Nessun abbonamento | **GitHub Copilot** (gratis con il GitHub Student Developer Pack) | In VS Code legge `AGENTS.md`; per il coding agent su GitHub c'e' `.github/workflows/copilot-setup-steps.yml` |
+
+L'assistente puo' lavorare **in locale** (editor o terminale) oppure
+**collegato a GitHub** con il connettore: in quel caso crea lui il branch
+(`codex/...`, `claude/...`, `copilot/...`) e il titolo della PR deve iniziare
+con `KCK-<n>: ` (vedi CONTRIBUTING.md, sezione 1).
+
+**Ogni ticket e' autonomo**: dice cosa leggere, cosa toccare, come verificare e
+contiene il prompt per l'IA. Si fanno solo i passi che il ticket prevede (un
+ticket di configurazione, per esempio, non ha test frame ne' class diagram).
 
 In tutti i casi il codice arriva su `develop` solo con una PR che passa la CI e
-viene approvata da una persona.
+viene approvata da un PM.
 
 **Jira e GitHub.** Lo stato del progetto si segue su **Jira** (board KCK),
 collegata a GitHub con l'app GitHub for Atlassian: branch, commit e PR con la
@@ -32,8 +42,8 @@ servono solo per segnalare bug (modulo **Bug**).
 | 2 | Sviluppatore + agente | Chiede all'agente un **piano** (nessun file modificato), seguendo la sezione "Procedura con l'agente" del ticket | Piano scritto |
 | 3 | Persona indicata nel ticket | Approva il piano; il nome va nella PR ("Piano approvato da") | Via libera all'implementazione |
 | 4 | Agente, rivisto dallo sviluppatore | Implementa solo l'ambito approvato | Codice sul branch |
-| 5 | Agente tester (`.claude/agents/tester.md`) o sviluppatore | Scrive un test per ogni test frame (TF) del ticket | Test nel branch |
-| 6 | Sviluppatore | `dart format .`, `flutter analyze`, `flutter test` in locale; agente revisore (`.claude/agents/revisore.md`) | Controlli verdi, esito del revisore |
+| 5 | Tester (`.claude/agents/tester.md`: agente in Claude Code, con altre IA sessione nuova con il contenuto del file come prima istruzione) o sviluppatore | Scrive un test per ogni test frame (TF) del ticket | Test nel branch |
+| 6 | Sviluppatore | `dart format .`, `flutter analyze`, `flutter test` in locale; revisore (`.claude/agents/revisore.md`, come per il tester, in una sessione nuova) | Controlli verdi, esito del revisore |
 | 7 | Sviluppatore | Apre la PR verso `develop` con il template compilato; ticket Jira in **In revisione** | CI sulla PR |
 | 8 | Un PM (Mario Celzo o Renato Mancino) diverso dall'autore; i compagni e i referenti possono revisionare e commentare | Revisiona e approva | Merge consentito dalle regole del branch |
 | 9 | Autore | **Squash and merge**, ticket Jira in **Fatto** | Lavoro su `develop` |
@@ -43,7 +53,7 @@ servono solo per segnalare bug (modulo **Bug**).
 | File | A cosa serve |
 |---|---|
 | `AGENTS.md`, `CLAUDE.md` | Istruzioni comuni: stack, comandi, regole sempre / chiedi prima / mai, quando un task e' finito |
-| `.claude/agents/tester.md`, `revisore.md` | Ruoli in contesto separato (tester e revisore) da usare in locale |
+| `.claude/agents/tester.md`, `revisore.md` | Ruoli in contesto separato (tester e revisore): agenti in Claude Code; con Codex, Copilot o altre IA si usa il contenuto del file come prima istruzione di una sessione nuova |
 | `.github/workflows/copilot-setup-steps.yml` | Ambiente per il Copilot coding agent |
 | `.github/workflows/ci.yml` | Nome del branch, DG9, avvisi su test e dipendenze modificati, tracciabilita' dei test frame, format/analyze/test, build web |
 | `.github/pull_request_template.md`, `.github/CODEOWNERS` | Tracciabilita' nella PR e approvazioni obbligatorie |
