@@ -1,5 +1,5 @@
-# Modulo per i difetti. Per un bug l'agente parte dal test che fallisce
-# (linee guida "Agentic Workflow", schema 2: instradamento).
+# Modulo per i difetti. Chi corregge un bug (a mano o con un agente) parte dal
+# test che fallisce (linee guida "Agentic Workflow", schema 2: instradamento).
 name: Bug
 description: Segnala un difetto trovato nell'app o in CI
 title: "KCK-: "

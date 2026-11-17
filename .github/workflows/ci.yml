@@ -20,8 +20,8 @@ name: CI
 on:
   pull_request:
     branches: [develop, main]
-    # ready_for_review: le PR aperte in bozza dall'agente implementatore (con
-    # github.token) non avviano la CI; parte quando vengono segnate pronte.
+    # ready_for_review: la CI riparte quando una PR in bozza (Draft) viene
+    # segnata pronta, cosi' la revisione parte sempre da un esito aggiornato.
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [develop, main]

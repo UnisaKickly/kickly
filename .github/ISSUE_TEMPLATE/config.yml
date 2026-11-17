@@ -1,2 +1,3 @@
-# Niente issue "libere": si sceglie sempre un modulo (task per agente o bug).
+# Il lavoro si traccia su Jira: su GitHub si aprono solo segnalazioni di bug,
+# sempre con il modulo "Bug" (niente issue "libere").
 blank_issues_enabled: false

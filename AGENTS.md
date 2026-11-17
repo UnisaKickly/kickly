@@ -68,11 +68,12 @@ se hai toccato `supabase/`); ogni TF del ticket ha un test; nessun file modifica
 dall'ambito approvato; PR compilata col template (RF/UC, artefatti, tentativi, esito del
 revisore, modifiche ai modelli); chi apre la PR sa spiegare ogni riga.
 
-## Pipeline su GitHub (dettagli in `docs/pm/pipeline-agenti.md`)
-Un task e' un'issue "Task per agente" con titolo `KCK-<n>: ...`; le fasi partono da label messe da una persona:
-`fase:piano` -> piano in un commento, nessun file modificato; `fase:implementazione` -> solo se sotto il piano
-c'e' "piano approvato da <nome>", branch `feature/KCK-<n>-issue<m>` e PR in bozza verso develop;
-`fase:test` sulla PR -> tester; PR "Ready for review" -> revisore. Lo stato del lavoro si segue su Jira.
+## Come si lavora con un agente (dettagli in `docs/pm/pipeline-agenti.md`)
+Su GitHub non ci sono agenti automatici: l'agente lavora in locale (Claude Code, Copilot nell'editor)
+o come Copilot coding agent, sempre su un ticket Jira e un branch `<tipo>/KCK-<n>-...` partito da `develop`.
+Ordine: piano (nessun file modificato) -> piano approvato -> implementazione -> un test per ogni TF ->
+controlli in locale -> revisore (`.claude/agents/revisore.md`) -> PR verso `develop` con il template.
+La CI e l'approvazione di un PM/code owner valgono per tutti allo stesso modo. Lo stato si segue su Jira.
 
 ## Documenti di riferimento (leggili solo quando servono)
 - `docs/rad/requisiti.md` requisiti, user story, tabella degli oggetti; `docs/rad/uc/` casi d'uso;
