@@ -11,3 +11,9 @@
 # Anche le pipeline CI/CD sono di competenza dei PM: una modifica sbagliata
 # qui disattiverebbe i controlli per tutti.
 /.github/ @mariocelzo @renatomancino
+
+# Istruzioni per gli agenti (AGENTS.md, CLAUDE.md, .claude/): l'agente o uno
+# studente non puo' cambiare le proprie regole senza l'approvazione di un PM.
+/AGENTS.md @mariocelzo @renatomancino
+/CLAUDE.md @mariocelzo @renatomancino
+/.claude/ @mariocelzo @renatomancino
