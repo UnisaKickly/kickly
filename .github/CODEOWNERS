@@ -17,3 +17,23 @@
 /AGENTS.md @mariocelzo @renatomancino
 /CLAUDE.md @mariocelzo @renatomancino
 /.claude/ @mariocelzo @renatomancino
+
+# Classi condivise da piu' casi d'uso (linee guida "Agentic Workflow", pag. 51):
+# ogni PR che le tocca richiede l'approvazione del proprietario o di un PM.
+# Entity del class diagram: proprietario Francesco Nuzzolo.
+/lib/features/utenza/domain/account.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/utenza/domain/giocatore.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/utenza/domain/gestore_campo.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/utenza/domain/dispositivo_registrato.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/leghe/domain/lega.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/strutture/domain/campo.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/partite/domain/partita.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/partite/domain/prenotazione.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/partite/domain/partecipazione.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/voto_notifiche/domain/votazione_mvp.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/voto_notifiche/domain/notifica.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/pagamenti/domain/quota.dart @Franz1908 @mariocelzo @renatomancino
+/lib/features/pagamenti/domain/transazione.dart @Franz1908 @mariocelzo @renatomancino
+# Repository e migration del database: proprietario Pietro Senatore.
+*_repository*.dart @Bistroh @mariocelzo @renatomancino
+/supabase/migrations/ @Bistroh @mariocelzo @renatomancino
