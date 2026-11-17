@@ -129,11 +129,15 @@ Se il lavoro non e' finito ma vuoi un parere, apri la PR come **Draft**.
 - Se ricevi richieste di modifica: correggi sullo **stesso branch**, fai commit e
   `git push`. La PR si aggiorna da sola. Rispondi ai commenti e segnali come
   risolti.
-- Servono **1 approvazione** e la **CI verde** per fare il merge.
+- Servono l'**approvazione di un PM** (Mario Celzo o Renato Mancino) e la **CI verde**
+  per fare il merge. I compagni possono revisionare e commentare, ma l'approvazione
+  che sblocca il merge e' quella di un PM; la PR aperta da un PM la approva l'altro.
+- Se la PR tocca entity condivise del class diagram o repository/migration, aggiungi
+  come revisore anche il referente (Francesco Nuzzolo o Pietro Senatore, vedi `.github/CODEOWNERS`).
 
 ### Passo 7 — Merge e chiusura
 
-1. Chi ha aperto la PR fa **Squash and merge** quando ha approvazione e CI verde.
+1. Chi ha aperto la PR fa **Squash and merge** quando ha l'approvazione di un PM e la CI verde.
 2. Cancella il branch remoto (GitHub propone il pulsante).
 3. Sposta il ticket Jira in **Fatto**.
 4. In locale:
@@ -188,7 +192,7 @@ branch non compare, quasi sempre la chiave nel nome e' sbagliata.
 Un ticket e' **Fatto** solo se:
 
 - [ ] tutti i criteri di accettazione del ticket sono rispettati;
-- [ ] il lavoro e' in una PR mergiata in `develop`, con almeno 1 approvazione;
+- [ ] il lavoro e' in una PR mergiata in `develop`, approvata da un PM;
 - [ ] la CI e' verde (nome del branch, formattazione, analisi, test, build);
 - [ ] il codice nuovo ha i suoi test (unit o widget) e i commenti dove servono;
 - [ ] i documenti toccati (RAD/SDD/ODD/matrice di tracciabilita') sono aggiornati;

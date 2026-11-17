@@ -74,7 +74,7 @@ Su GitHub non ci sono agenti automatici: l'agente lavora in locale (Claude Code,
 o come Copilot coding agent, sempre su un ticket Jira e un branch `<tipo>/KCK-<n>-...` partito da `develop`.
 Ordine: piano (nessun file modificato) -> piano approvato -> implementazione -> un test per ogni TF ->
 controlli in locale -> revisore (`.claude/agents/revisore.md`) -> PR verso `develop` con il template.
-La CI e l'approvazione di un PM/code owner valgono per tutti allo stesso modo. Lo stato si segue su Jira.
+La CI e l'approvazione di un PM valgono per tutti allo stesso modo. Lo stato si segue su Jira.
 
 ## Documenti di riferimento (leggili solo quando servono)
 - `docs/rad/requisiti.md` requisiti, user story, tabella degli oggetti; `docs/rad/uc/` casi d'uso;

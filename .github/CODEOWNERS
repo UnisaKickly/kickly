@@ -1,41 +1,15 @@
 # CODEOWNERS: chi viene aggiunto automaticamente come revisore di una PR in
-# base ai file modificati. Con la branch protection "Require review from Code
-# Owners" la loro approvazione diventa obbligatoria.
+# base ai file modificati. Con la regola "Require review from Code Owners" del
+# ruleset su main e develop la loro approvazione diventa obbligatoria.
 #
-# Con piu' owner sulla stessa riga basta l'approvazione di UNO dei due PM
-# (Mario Celzo o Renato Mancino).
+# Regola del progetto: OGNI pull request (codice, documenti, CI) deve essere
+# approvata da un Project Manager. Basta l'approvazione di UNO dei due PM
+# (Mario Celzo o Renato Mancino); la PR aperta da un PM la approva l'altro.
+* @mariocelzo @renatomancino
 
-# I documenti (docs/) devono sempre essere approvati dai Project Manager.
-/docs/ @mariocelzo @renatomancino
-
-# Anche le pipeline CI/CD sono di competenza dei PM: una modifica sbagliata
-# qui disattiverebbe i controlli per tutti.
-/.github/ @mariocelzo @renatomancino
-
-# Istruzioni per gli agenti (AGENTS.md, CLAUDE.md, .claude/): l'agente o uno
-# studente non puo' cambiare le proprie regole senza l'approvazione di un PM.
-/AGENTS.md @mariocelzo @renatomancino
-/CLAUDE.md @mariocelzo @renatomancino
-/.claude/ @mariocelzo @renatomancino
-# Script eseguiti dalla CI (es. tracciabilita' dei test frame).
-/scripts/ @mariocelzo @renatomancino
-
-# Classi condivise da piu' casi d'uso (linee guida "Agentic Workflow", pag. 51):
-# ogni PR che le tocca richiede l'approvazione del proprietario o di un PM.
-# Entity del class diagram: proprietario Francesco Nuzzolo.
-/lib/features/utenza/domain/account.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/utenza/domain/giocatore.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/utenza/domain/gestore_campo.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/utenza/domain/dispositivo_registrato.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/leghe/domain/lega.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/strutture/domain/campo.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/partite/domain/partita.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/partite/domain/prenotazione.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/partite/domain/partecipazione.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/voto_notifiche/domain/votazione_mvp.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/voto_notifiche/domain/notifica.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/pagamenti/domain/quota.dart @Franz1908 @mariocelzo @renatomancino
-/lib/features/pagamenti/domain/transazione.dart @Franz1908 @mariocelzo @renatomancino
-# Repository e migration del database: proprietario Pietro Senatore.
-*_repository*.dart @Bistroh @mariocelzo @renatomancino
-/supabase/migrations/ @Bistroh @mariocelzo @renatomancino
+# Referenti tecnici (non approvano al posto dei PM, ma vanno coinvolti come
+# revisori quando la PR tocca le loro parti):
+# - Entity del class diagram condivise da piu' casi d'uso
+#   (lib/features/*/domain/<entity>.dart): Francesco Nuzzolo (@Franz1908).
+# - Repository (*_repository*.dart) e migration (supabase/migrations/):
+#   Pietro Senatore (@Bistroh).

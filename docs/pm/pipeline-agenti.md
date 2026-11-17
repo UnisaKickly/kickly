@@ -35,7 +35,7 @@ servono solo per segnalare bug (modulo **Bug**).
 | 5 | Agente tester (`.claude/agents/tester.md`) o sviluppatore | Scrive un test per ogni test frame (TF) del ticket | Test nel branch |
 | 6 | Sviluppatore | `dart format .`, `flutter analyze`, `flutter test` in locale; agente revisore (`.claude/agents/revisore.md`) | Controlli verdi, esito del revisore |
 | 7 | Sviluppatore | Apre la PR verso `develop` con il template compilato; ticket Jira in **In revisione** | CI sulla PR |
-| 8 | Compagno diverso dall'autore (code owner se la PR tocca file con proprietario) | Revisiona e approva | Merge consentito dalle regole del branch |
+| 8 | Un PM (Mario Celzo o Renato Mancino) diverso dall'autore; i compagni e i referenti possono revisionare e commentare | Revisiona e approva | Merge consentito dalle regole del branch |
 | 9 | Autore | **Squash and merge**, ticket Jira in **Fatto** | Lavoro su `develop` |
 
 ## 2. File che servono al lavoro con gli agenti
@@ -65,7 +65,7 @@ servono solo per segnalare bug (modulo **Bug**).
 - [x] Settings -> Actions -> General -> Workflow permissions: **Read repository contents and packages permissions** e **Allow GitHub Actions to create and approve pull requests** (serve alla release settimanale)
 
 **Regole su `main` e `develop`** (Settings -> Rules -> Rulesets)
-- [x] Require a pull request before merging, **1 approvazione**, Dismiss stale approvals, **Require review from Code Owners**
+- [x] Require a pull request before merging, **1 approvazione**, Dismiss stale approvals, **Require review from Code Owners** (in `CODEOWNERS` i PM sono owner di tutto il repository: ogni PR va approvata da un PM)
 - [x] Require status checks: "Nome del branch", "Controlli DG9 e test modificati", "Formattazione, analisi e test"
 - [x] Block force pushes, Restrict deletions
 - [x] **Nessun bypass** per gli amministratori: anche i PM passano dall'approvazione di un'altra persona
@@ -81,7 +81,7 @@ servono solo per segnalare bug (modulo **Bug**).
 | Check "Nome del branch" rosso | Branch non nella forma `<tipo>/KCK-<n>-...` (es. i branch `copilot/...` creati dal Copilot coding agent) | CONTRIBUTING.md, sezione 7, per rinominarlo |
 | Check "Controlli DG9" rosso | SDK Supabase/FCM/Stripe importato in presentation/domain | AGENTS.md, regole DG9 |
 | La CI non parte su una PR aperta da un bot o da Copilot | GitHub chiede l'approvazione prima di eseguire i workflow | Pulsante "Approve and run workflows" nella PR |
-| Merge bloccato con CI verde | Manca l'approvazione, o quella del code owner | Riquadro in fondo alla PR |
+| Merge bloccato con CI verde | Manca l'approvazione di un PM | Riquadro in fondo alla PR |
 | L'agente modifica file fuori dal ticket o "aggiusta" i test | Ambito non chiaro nel prompt | Ripartire dal piano; avviso della CI sui test modificati |
 
 ## 5. Metriche (servono a migliorare il processo, non a valutare le persone)
@@ -101,5 +101,5 @@ Piano approvato prima dell'implementazione; nomi del class diagram e dipendenze
 dell'SDD rispettati (controllati con il revisore); un test per ogni test frame e
 CI verde; nessun test esistente modificato senza motivo scritto nella PR;
 nessuna dipendenza nuova non approvata da un PM; modelli aggiornati nella stessa
-PR; PR con RF/UC, artefatti ed esito del revisore; approvazione di un membro
+PR; PR con RF/UC, artefatti ed esito del revisore; approvazione di un PM
 diverso dall'autore; l'autore sa spiegare il codice.
