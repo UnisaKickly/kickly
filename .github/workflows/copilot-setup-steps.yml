@@ -1,0 +1,29 @@
+# =============================================================================
+# Preparazione dell'ambiente per il Copilot coding agent (incluso nel GitHub
+# Student Developer Pack). Il nome del file e del job sono FISSI: Copilot li
+# cerca per installare gli strumenti prima di lavorare a un'issue/PR.
+# Serve solo a chi assegna un lavoro a Copilot su GitHub; chi usa l'agente in
+# locale (Claude Code, Copilot in VS Code) non ne ha bisogno.
+# Linee guida "Agentic Workflow", passo 12 (variante Copilot).
+# =============================================================================
+name: Copilot Setup Steps
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # Stessa versione di Flutter della CI, cosi' l'agente puo' eseguire
+      # dart format, flutter analyze e flutter test come il team.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+      - run: flutter pub get

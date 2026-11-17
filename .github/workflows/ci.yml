@@ -113,6 +113,20 @@ jobs:
             echo "Nessun test esistente modificato."
           fi
 
+      # Avviso (non blocca) se la PR cambia le dipendenze: ogni libreria nuova va
+      # approvata da un PM (esiste davvero? e' mantenuta? licenza compatibile?).
+      - name: Avviso su dipendenze modificate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if git diff --quiet "origin/$BASE...HEAD" -- pubspec.yaml; then
+            echo "Nessuna dipendenza modificata."
+          else
+            echo "::warning::Questa PR modifica pubspec.yaml: le nuove dipendenze vanno approvate da un PM (vedi AGENTS.md)."
+            git diff "origin/$BASE...HEAD" -- pubspec.yaml
+          fi
+
   analyze-and-test:
     name: Formattazione, analisi e test
     runs-on: ubuntu-latest
