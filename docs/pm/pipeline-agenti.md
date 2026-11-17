@@ -59,7 +59,7 @@ servono solo per segnalare bug (modulo **Bug**).
 - [x] `AGENTS.md`, `CLAUDE.md` con `@AGENTS.md`, `tester.md`, `revisore.md`
 - [x] Modulo "Bug" e `blank_issues_enabled: false`
 - [x] CI e template della PR su `develop` (branch predefinito)
-- [ ] Settings -> Collaborators: tutti i membri con ruolo **Write**
+- [x] Settings -> Collaborators: tutti i membri con ruolo **Write** (PM con ruolo Admin)
 
 **Permessi delle Actions**
 - [x] Settings -> Actions -> General -> Workflow permissions: **Read repository contents and packages permissions** e **Allow GitHub Actions to create and approve pull requests** (serve alla release settimanale)
@@ -69,7 +69,7 @@ servono solo per segnalare bug (modulo **Bug**).
 - [x] Require status checks: "Nome del branch", "Controlli DG9 e test modificati", "Formattazione, analisi e test"
 - [x] Block force pushes, Restrict deletions
 - [x] **Nessun bypass** per gli amministratori: anche i PM passano dall'approvazione di un'altra persona
-- [ ] Aprendo `.github/CODEOWNERS` su GitHub non compaiono errori (utenti con accesso Write)
+- [x] Gli utenti citati in `.github/CODEOWNERS` hanno tutti accesso Write o Admin
 
 **Rilascio**
 - [x] Settings -> Pages -> Source = **GitHub Actions** (sito su GitHub Pages)
