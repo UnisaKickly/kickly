@@ -8,7 +8,8 @@
 App mobile per organizzare partite di calcio amatoriale: leghe, RSVP, prenotazione
 del campo, quote in app (Stripe Connect, solo test), voto MVP, notifiche.
 La specifica e' NELLA REPO (`docs/`), ricavata da RAD v2.9 e SDD v1.0: non hai accesso
-al Drive, quindi se un'informazione non e' in `docs/` o nel ticket, chiedi.
+al Drive, quindi se un'informazione non e' in `docs/` o nel ticket, chiedi. Se un ticket cita
+"RAD v2.9 (Drive)" o "SDD v1.0 (Drive)", usa `docs/fonti/Kickly_RAD_v2.9.pdf` e `docs/fonti/Kickly_SDD_v1.0.pdf`.
 
 ## Stack e comandi
 Flutter 3.47.0 / Dart, Supabase (PostgreSQL + RLS, Auth, Realtime, Edge Functions in
