@@ -72,6 +72,47 @@ jobs:
             exit 1
           fi
 
+  # Controlli sul lavoro con gli agenti (linee guida "Agentic Workflow"):
+  #  1. DG9 dell'SDD: nessun SDK di Supabase/FCM/Stripe nei livelli Presentation
+  #     e Domain (solo il livello Data e lib/core possono usarli). Fallisce la PR.
+  #  2. Avviso (non blocca) se la PR modifica o cancella test GIA' esistenti:
+  #     e' il segnale tipico di un agente che "aggiusta" i test per farli passare.
+  agentic-checks:
+    name: Controlli DG9 e test modificati
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Serve la storia per confrontare il branch con la base della PR.
+          fetch-depth: 0
+
+      - name: DG9 - nessun SDK esterno in presentation/domain
+        run: |
+          # Se la cartella non esiste ancora (prima dell'EN-1) il controllo passa.
+          dirs=$(find lib/features -type d \( -name presentation -o -name domain \) 2>/dev/null || true)
+          if [ -z "$dirs" ]; then echo "Nessuna cartella presentation/domain: niente da controllare."; exit 0; fi
+          # shellcheck disable=SC2086
+          if grep -rnE "package:(supabase_flutter|supabase|firebase_[a-z_]+|flutter_stripe)/" $dirs; then
+            echo "::error::DG9 violato: SDK esterni importati in presentation/domain. Usa un Repository nel livello data (vedi AGENTS.md)."
+            exit 1
+          fi
+          echo "DG9 rispettato."
+
+      - name: Avviso su test esistenti modificati
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          # M = modificato, D = cancellato, R = rinominato (A = nuovo, ok).
+          changed=$(git diff --name-status "origin/$BASE...HEAD" -- test | grep -E '^(M|D|R)' || true)
+          if [ -n "$changed" ]; then
+            echo "::warning::Questa PR modifica o cancella test esistenti. Spiega il motivo nel template della PR."
+            echo "$changed"
+          else
+            echo "Nessun test esistente modificato."
+          fi
+
   analyze-and-test:
     name: Formattazione, analisi e test
     runs-on: ubuntu-latest
