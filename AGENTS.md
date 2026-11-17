@@ -67,6 +67,12 @@ se hai toccato `supabase/`); ogni TF del ticket ha un test; nessun file modifica
 dall'ambito approvato; PR compilata col template (RF/UC, artefatti, tentativi, esito del
 revisore, modifiche ai modelli); chi apre la PR sa spiegare ogni riga.
 
+## Pipeline su GitHub (dettagli in `docs/pm/pipeline-agenti.md`)
+Un task e' un'issue "Task per agente" con titolo `KCK-<n>: ...`; le fasi partono da label messe da una persona:
+`fase:piano` -> piano in un commento, nessun file modificato; `fase:implementazione` -> solo se sotto il piano
+c'e' "piano approvato da <nome>", branch `feature/KCK-<n>-issue<m>` e PR in bozza verso develop;
+`fase:test` sulla PR -> tester; PR "Ready for review" -> revisore. Lo stato del lavoro si segue su Jira.
+
 ## Documenti di riferimento (leggili solo quando servono)
 - `docs/rad/requisiti.md` requisiti, user story, tabella degli oggetti; `docs/rad/uc/` casi d'uso;
   `docs/rad/mockup/` mock-up UI_* e percorsi di navigazione
@@ -74,4 +80,5 @@ revisore, modifiche ai modelli); chi apre la PR sa spiegare ogni riga.
   decisioni sui punti non coperti dal RAD
 - `docs/sdd/design_goals.md` design goal e trade-off; `docs/sdd/*.puml` component e deployment
 - `docs/test/` category partition e test frame
+- `docs/fonti/` RAD v2.9 e SDD v1.0 originali (PDF): solo se il ticket li cita, altrimenti usa i file in `docs/`
 - `CONTRIBUTING.md` flusso Git/Jira

@@ -1,0 +1,55 @@
+# =============================================================================
+# Fase 1 - Pianificatore (linee guida "Agentic Workflow", passo 7).
+# Parte quando un PM aggiunge la label "fase:piano" a un'issue "Task per agente".
+# L'agente legge AGENTS.md, l'issue e i file di Specifica e risponde con un
+# PIANO in un commento. Non modifica nessun file.
+# Lo sviluppatore assegnato rilegge il piano e, se va bene, scrive
+# "piano approvato da <nome>" e aggiunge la label "fase:implementazione".
+# =============================================================================
+name: Agente pianificatore
+
+on:
+  issues:
+    types: [labeled]
+
+# Un solo agente alla volta per issue: niente due piani in parallelo.
+concurrency:
+  group: agente-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  piano:
+    if: github.event.label.name == 'fase:piano'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      id-token: write # serve all'action per ottenere il token dell'app di Claude
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Il testo dell'issue NON e' copiato nel prompt: l'agente lo legge con
+          # gh issue view (riduce il rischio di prompt injection).
+          prompt: |
+            Sei il pianificatore di Kickly. Rispetta AGENTS.md.
+            Leggi l'issue #${{ github.event.issue.number }} con `gh issue view ${{ github.event.issue.number }} --comments`
+            e SOLO i file elencati in "Specifica".
+            Non modificare nessun file.
+            Rispondi con UN commento sull'issue (`gh issue comment`) intitolato "## Piano" che contiene:
+            1. file da creare o modificare (solo dentro l'Ambito dell'issue);
+            2. classi e metodi con i nomi esatti del class diagram / RAD;
+            3. ordine delle chiamate GUI -> Control -> Repository (dal sequence diagram, se c'e');
+            4. un test per ogni test frame elencato, con l'id del frame nel nome;
+            5. dipendenze nuove, classi non previste o file fuori ambito: se servono, elencali sotto
+               "Da approvare dai PM" e spiega perche'.
+            Se due modelli sono in contrasto o manca un'informazione, NON scegliere: scrivilo nel commento
+            sotto "Domande" e fermati.
+          claude_args: >-
+            --max-turns 15
+            --allowedTools "Read,Glob,Grep,Bash(gh issue view:*),Bash(gh issue comment:*)"

@@ -1,0 +1,71 @@
+# =============================================================================
+# Fase 2 - Implementatore (linee guida "Agentic Workflow", passo 9).
+# Parte quando lo sviluppatore assegnato aggiunge "fase:implementazione"
+# all'issue, DOPO aver scritto "piano approvato da <nome>" sotto il piano.
+# L'agente implementa il piano approvato in un branch del ticket, esegue i
+# controlli e apre una PR IN BOZZA verso develop.
+# Nota: una PR aperta con github.token non avvia la CI; la CI parte quando la
+# PR viene segnata "Ready for review" (vedi ci.yml).
+# =============================================================================
+name: Agente implementatore
+
+on:
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: agente-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.47.0"
+
+jobs:
+  implementa:
+    if: github.event.label.name == 'fase:implementazione'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Sei l'implementatore di Kickly. Rispetta AGENTS.md.
+            Leggi l'issue #${{ github.event.issue.number }} con `gh issue view ${{ github.event.issue.number }} --comments`.
+            1. Cerca il commento "## Piano" e, DOPO di esso, un commento che contiene "piano approvato da".
+               Se l'approvazione manca, commenta l'issue spiegando che serve e fermati senza toccare file.
+            2. Crea il branch `feature/<chiave Jira del titolo>-issue${{ github.event.issue.number }}`
+               (es. feature/KCK-235-issue12) partendo da develop.
+            3. Implementa SOLO il piano approvato, solo nei file dell'Ambito. Nomi esattamente come nel class diagram.
+               Non aggiungere dipendenze in pubspec.yaml. Non modificare test esistenti.
+            4. Esegui `dart format .`, `flutter analyze` e `flutter test`. Massimo 3 tentativi sullo stesso errore:
+               poi fermati, fai comunque commit e push e scrivi nell'issue cosa non funziona.
+            5. Commit con messaggio `feat: <chiave Jira> descrizione`, push del branch.
+            6. Apri la PR IN BOZZA verso develop con
+               `gh pr create --draft --base develop --title "<chiave Jira>: <titolo>"`
+               e un corpo che segue .github/pull_request_template.md, con "Closes #${{ github.event.issue.number }}",
+               agente usato (si, claude-code-action), chi ha approvato il piano, tentativi falliti.
+            7. Commenta l'issue con il link alla PR.
+          claude_args: >-
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,Write,Edit,Bash(flutter:*),Bash(dart:*),Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*)"

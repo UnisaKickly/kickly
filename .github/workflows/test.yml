@@ -1,0 +1,63 @@
+# =============================================================================
+# Fase 3 - Tester (linee guida "Agentic Workflow", passo 10).
+# Parte quando lo sviluppatore aggiunge la label "fase:test" alla PR.
+# Un agente SEPARATO, con il ruolo di .claude/agents/tester.md, scrive un test
+# per ogni test frame partendo da caso d'uso e category partition, senza
+# leggere il corpo dei metodi. Non puo' modificare file esistenti (niente Edit).
+# =============================================================================
+name: Agente tester
+
+on:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: agente-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: "3.47.0"
+
+jobs:
+  test:
+    # Solo PR dello stesso repository: le PR da fork non ricevono i secret.
+    if: >-
+      github.event.label.name == 'fase:test' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Segui le istruzioni del ruolo in .claude/agents/tester.md e AGENTS.md.
+            PR #${{ github.event.pull_request.number }}: leggila con `gh pr view ${{ github.event.pull_request.number }}`
+            per sapere caso d'uso e test frame (sezione tracciabilita').
+            Leggi solo il caso d'uso in docs/rad/uc/, la category partition in docs/test/ e le FIRME dei metodi
+            del Control (non il corpo).
+            Crea i nuovi file di test sotto test/ (un test per frame, id del frame nel nome).
+            Esegui `flutter test`. Se un test fallisce NON correggere il codice e NON modificare il test.
+            Fai commit (`test: <chiave Jira> test dai test frame`) e push sul branch della PR.
+            Commenta la PR con una tabella: frame, esito atteso (dal caso d'uso), esito ottenuto.
+          claude_args: >-
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,Write,Bash(flutter test:*),Bash(dart format:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr view:*),Bash(gh pr comment:*)"

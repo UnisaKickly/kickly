@@ -1,0 +1,50 @@
+# =============================================================================
+# Fase 5 - Revisore automatico (linee guida "Agentic Workflow", passo 11).
+# Parte quando la PR viene segnata "Ready for review". Un agente che non ha
+# visto la conversazione dell'implementatore confronta la diff con i modelli
+# (ruolo in .claude/agents/revisore.md) e commenta. Non modifica file.
+# Dopo il suo commento serve comunque l'approvazione di un compagno diverso
+# dall'autore (e del code owner, se la PR tocca file condivisi).
+# =============================================================================
+name: Agente revisore
+
+on:
+  pull_request:
+    types: [ready_for_review]
+
+concurrency:
+  group: agente-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  revisione:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Segui le istruzioni del ruolo in .claude/agents/revisore.md e AGENTS.md.
+            PR #${{ github.event.pull_request.number }}: leggi descrizione e diff con
+            `gh pr view ${{ github.event.pull_request.number }}` e `gh pr diff ${{ github.event.pull_request.number }}`.
+            Controlla per primo l'elenco dei file modificati e pubspec.yaml.
+            Confronta con docs/modelli/class.puml, il sequence diagram del caso d'uso, docs/sdd/component.puml
+            e le regole di AGENTS.md. Controlla anche che il template della PR sia compilato
+            (RF/UC, artefatti, piano approvato da, tentativi, modifiche ai modelli, dichiarazione).
+            Pubblica UN commento con `gh pr comment`: per ogni differenza file, riga, cosa dice il modello,
+            cosa fa il codice. Se non trovi differenze scrivi "Nessuna differenza rispetto ai modelli".
+          claude_args: >-
+            --max-turns 20
+            --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"

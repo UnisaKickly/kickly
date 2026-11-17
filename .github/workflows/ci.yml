@@ -20,6 +20,9 @@ name: CI
 on:
   pull_request:
     branches: [develop, main]
+    # ready_for_review: le PR aperte in bozza dall'agente implementatore (con
+    # github.token) non avviano la CI; parte quando vengono segnate pronte.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [develop, main]
   # Permette di rilanciare la CI a mano dalla tab "Actions".
@@ -126,6 +129,11 @@ jobs:
             echo "::warning::Questa PR modifica pubspec.yaml: le nuove dipendenze vanno approvate da un PM (vedi AGENTS.md)."
             git diff "origin/$BASE...HEAD" -- pubspec.yaml
           fi
+
+      # Tabella "test frame -> test" nel riepilogo del run (non blocca):
+      # mostra quali frame della category partition non hanno ancora un test.
+      - name: Tracciabilita' test frame
+        run: bash scripts/tracciabilita.sh >> "$GITHUB_STEP_SUMMARY"
 
   analyze-and-test:
     name: Formattazione, analisi e test

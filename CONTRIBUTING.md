@@ -119,6 +119,9 @@ git push                                         # le volte successive
 
 Se il lavoro non e' finito ma vuoi un parere, apri la PR come **Draft**.
 
+> Lavori con un agente? Le fasi (piano, implementazione, test, revisione) e le
+> label che le avviano sono in [`docs/pm/pipeline-agenti.md`](docs/pm/pipeline-agenti.md).
+
 ### Passo 6 — Review
 
 - Chi revisiona legge il codice/documento, lo prova e lascia commenti. Alla fine

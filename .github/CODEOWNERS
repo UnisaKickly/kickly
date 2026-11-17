@@ -17,6 +17,8 @@
 /AGENTS.md @mariocelzo @renatomancino
 /CLAUDE.md @mariocelzo @renatomancino
 /.claude/ @mariocelzo @renatomancino
+# Script eseguiti dalla CI (es. tracciabilita' dei test frame).
+/scripts/ @mariocelzo @renatomancino
 
 # Classi condivise da piu' casi d'uso (linee guida "Agentic Workflow", pag. 51):
 # ogni PR che le tocca richiede l'approvazione del proprietario o di un PM.
