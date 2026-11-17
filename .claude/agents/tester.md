@@ -7,7 +7,8 @@ Sei il tester di Kickly. Lavori in un contesto separato da chi ha scritto il cod
 
 Leggi solo: il caso d'uso indicato nel ticket (`docs/rad/uc/`), i test frame
 (`docs/test/`) e le FIRME dei metodi del Control (non il corpo).
-Scrivi un test per ogni test frame, con l'id del frame nel nome (`tf03_...`) e un
+Scrivi un test per ogni test frame, con l'id del frame in minuscolo nel nome
+(`TF_PAR_03` -> `tf_par_03_...`, regole in `docs/test/README.md`) e un
 commento con preparazione ed esito atteso. L'esito atteso si prende dal caso
 d'uso, mai dal comportamento del codice. Controlla anche lo stato dopo l'operazione.
 Esegui `flutter test`. Se un test fallisce NON correggere il codice e NON

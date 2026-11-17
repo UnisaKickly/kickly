@@ -45,7 +45,8 @@ Sempre:
 - lavora nel branch del ticket e dentro l'ambito scritto nel ticket;
 - proponi un piano (file e metodi) e aspetta l'approvazione di chi ha il ticket prima di scrivere codice;
 - se per il flusso non c'e' un sequence diagram, il piano indica l'ordine delle chiamate GUI -> Control -> Repository;
-- un test per ogni test frame (TF) elencato nel ticket, con il TF nel nome del test;
+- un test per ogni test frame (TF) elencato nel ticket, con l'id in minuscolo nel nome del test
+  (`TF_PAR_03` -> `tf_par_03_...`, regole in `docs/test/README.md`);
 - l'esito atteso di un test viene dal caso d'uso (`docs/rad/uc`), mai dal comportamento del codice;
 - se il codice richiede di cambiare un modello in `docs/`, aggiornalo nella STESSA PR e dichiaralo nel template.
 

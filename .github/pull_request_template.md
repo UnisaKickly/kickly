@@ -23,7 +23,7 @@ KCK-
 
 <!-- RF/UC del RAD e file usati come specifica. Esempio:
      RF_LEG_1, UC_LEG_1; docs/rad/uc/UC_LEG_1_*.md, docs/modelli/class.puml (commit a1b2c3d);
-     test frame TF01-TF08 (docs/test/cp_UC_LEG_1.md) -->
+     test frame TF_LEG_01-TF_LEG_08 (docs/test/cp_UC_LEG_1.md) -->
 - RF / UC:
 - Artefatti usati:
 
