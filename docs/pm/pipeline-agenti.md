@@ -11,9 +11,14 @@ girano dentro GitHub Actions (richiederebbero una chiave API a pagamento). L'uni
 agente automatico e' il revisore Gemini (`.github/workflows/gemini-review.yml`,
 KCK-265): usa una chiave GRATUITA di Google AI Studio nel secret `GEMINI_API_KEY`,
 senza fatturazione collegata, legge la diff e pubblica un commento con le differenze
-rispetto ai modelli. Non approva, non modifica file e non apre issue; parte sulle PR
-del team (non da fork, non in bozza) e si rilancia aggiungendo l'etichetta
-`gemini-review`. Se la quota gratuita finisce, semplicemente non commenta.
+rispetto ai modelli. Non approva, non modifica file e non apre issue.
+Copilot e' il revisore principale (richiesto su ogni PR): Gemini **subentra solo
+quando Copilot dice di non poter rivedere la PR per quota finita**; quando la quota di
+Copilot si resetta torna a lavorare Copilot e Gemini non parte. Gemini si puo' anche
+chiamare a mano aggiungendo l'etichetta `gemini-review`. Riguarda solo PR del team
+(non da fork, non in bozza), salta quelle di sola documentazione, ha un tetto
+giornaliero (variabile `GEMINI_DAILY_LIMIT`, predefinito 30) e, se la quota gratuita
+di Google finisce, semplicemente non commenta.
 Per scrivere il codice ognuno usa l'assistente IA che preferisce, con il proprio account:
 
 | Se usi | Consigliato | Note |

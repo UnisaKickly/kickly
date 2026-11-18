@@ -6,11 +6,15 @@
 # progetto e scrive l'elenco delle differenze. NON approva, NON modifica file,
 # NON apre issue: l'approvazione resta di un PM (CODEOWNERS).
 #
-# Quando parte:
-#   - all'apertura di una PR (non in bozza) e quando una bozza viene segnata
-#     pronta (ready for review);
-#   - ogni volta che si aggiunge l'etichetta `gemini-review` alla PR (serve per
-#     rifare la review dopo le correzioni, senza sprecare richieste ad ogni push).
+# Quando parte (Copilot e' il revisore principale, Gemini e' la riserva):
+#   - Copilot rivede ogni PR in automatico finche' ha quota. Quando la quota
+#     finisce, Copilot pubblica una review che dice "unable to review": a quel
+#     punto parte Gemini. Quando la quota di Copilot si resetta, torna a
+#     lavorare lui e Gemini non parte. Gemini non rivede due volte lo stesso
+#     commit di una PR;
+#   - a richiesta, aggiungendo l'etichetta `gemini-review` alla PR (utile per
+#     rifare la review dopo le correzioni); Copilot e Gemini restano
+#     indipendenti.
 #
 # Sicurezza (PDF, pag. 100):
 #   - parte solo per PR del team (OWNER/MEMBER/COLLABORATOR) e solo se il branch
@@ -28,8 +32,9 @@
 #   - circa UNA richiesta a Gemini per review (nessuno strumento, quindi nessun
 #     giro in piu'); diff massima di 25000 caratteri; 2 giri massimi; timeout di
 #     10 minuti; una sola esecuzione per PR alla volta (concurrency);
-#   - niente review per PR di sola documentazione, per la release settimanale
-#     (develop) e per Dependabot;
+#   - niente review per PR di sola documentazione (controllato nello step
+#     "Controlla il tetto giornaliero"), per la release settimanale (develop)
+#     e per Dependabot;
 #   - tetto giornaliero di review (variabile GEMINI_DAILY_LIMIT, predefinito 30);
 #   - `continue-on-error`: se Gemini non risponde la PR non diventa rossa.
 #
@@ -39,14 +44,16 @@
 name: Gemini review
 
 on:
+  # 1) Subentro: Copilot e' il revisore principale (richiesto in automatico su
+  #    ogni PR). Se ha finito la quota pubblica una review che dice che non ha
+  #    potuto rivedere la PR: a quel punto parte Gemini. Quando la quota di
+  #    Copilot si resetta, la sua review torna a funzionare e Gemini non parte.
+  pull_request_review:
+    types: [submitted]
+  # 2) A richiesta: aggiungendo l'etichetta `gemini-review` a una PR.
   pull_request:
     branches: [develop, main]
-    types: [opened, ready_for_review, labeled]
-    # Le PR che toccano SOLO documenti non partono: non c'e' codice da
-    # confrontare con i modelli e ogni review consuma quota gratuita.
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    types: [labeled]
 
 # Una sola esecuzione per PR: se parte una seconda, annulla la prima.
 concurrency:
@@ -71,7 +78,12 @@ jobs:
       !startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) &&
-      (github.event.action != 'labeled' || github.event.label.name == 'gemini-review')
+      (
+        (github.event_name == 'pull_request' && github.event.label.name == 'gemini-review') ||
+        (github.event_name == 'pull_request_review' &&
+         github.event.review.user.login == 'copilot-pull-request-reviewer[bot]' &&
+         contains(github.event.review.body, 'unable to review'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Non e' un controllo obbligatorio: se Gemini ha un problema (quota, rete)
@@ -95,8 +107,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           LIMIT: ${{ vars.GEMINI_DAILY_LIMIT || '30' }}
           WORKFLOW_FILE: gemini-review.yml
+          BASE: ${{ github.event.pull_request.base.ref }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
+          # 1) PR di sola documentazione: niente codice da confrontare con i
+          #    modelli, quindi niente richiesta a Gemini.
+          non_doc=$(git diff --name-only "origin/$BASE...HEAD" | grep -vE '^docs/|\.md$' || true)
+          if [ -z "$non_doc" ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR di sola documentazione: nessuna review Gemini."
+            exit 0
+          fi
+          # 2) Subentro dopo Copilot: se questa versione della PR (commit) e' gia'
+          #    stata rivista da Gemini non si rifa' (Copilot puo' ripetere il
+          #    messaggio di quota piu' volte). Con l'etichetta invece si rifa'.
+          if [ "$EVENT" = "pull_request_review" ]; then
+            commenti=$(gh pr view "$PR" --json comments --jq '.comments[].body' || true)
+            if grep -q "gemini-review:$SHA" <<<"$commenti"; then
+              echo "ok=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Questa versione della PR e' gia' stata rivista da Gemini."
+              exit 0
+            fi
+          fi
+          # 3) Tetto giornaliero.
           oggi=$(date -u +%F)
           # Esecuzioni di oggi che hanno davvero lavorato (esito success/failure);
           # quelle saltate da una condizione ("skipped") non consumano richieste.
@@ -117,7 +153,7 @@ jobs:
         id: ctx
         if: steps.guard.outputs.ok == 'true'
         env:
-          BASE: ${{ github.base_ref }}
+          BASE: ${{ github.event.pull_request.base.ref }}
           # Titolo e descrizione li sceglie chi apre la PR: passati via env e
           # trattati come dati, mai come istruzioni.
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -190,12 +226,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
           REVIEW: ${{ steps.gemini.outputs.summary }}
         run: |
           {
+            echo "<!-- gemini-review:$SHA -->"
             echo "### Review automatica (Gemini)"
             echo
-            echo "_Elenco di differenze rispetto ai modelli e alle regole di AGENTS.md. Non e' un'approvazione: serve la revisione di una persona. Per rifarla dopo le correzioni aggiungi l'etichetta \`gemini-review\`._"
+            echo "_Elenco di differenze rispetto ai modelli e alle regole di AGENTS.md (Gemini subentra quando Copilot non puo' rivedere). Non e' un'approvazione: serve la revisione di una persona. Per rifarla dopo le correzioni aggiungi l'etichetta \`gemini-review\`._"
             echo
             printf '%s\n' "$REVIEW"
           } > commento.md
