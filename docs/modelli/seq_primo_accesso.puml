@@ -1,0 +1,40 @@
+' Sequence diagram SD_UC_ACC_1 (Primo accesso giocatore).
+' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 50 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Serve a fissare l'ordine delle chiamate di registrazione, onboarding e configurazione
+' della Player Card, da cui si ricavano le firme dei metodi di RegistrazioneControl.
+' Nomi, messaggi e ordine sono quelli del RAD: non correggere qui, segnalare nel ticket.
+@startuml SD_UC_ACC_1
+title SD_UC_ACC_1 (Primo accesso giocatore)
+autonumber
+skinparam sequenceMessageAlign left
+
+actor "Utente non\nregistrato" as Utente
+boundary FormRegistrazione
+boundary FormOnboarding
+boundary FormPlayerCard
+boundary Dashboard
+control RegistrazioneControl
+entity Account
+
+' Registrazione: dati anagrafici e creazione dell'Account
+Utente -> FormRegistrazione : seleziona Registrati
+FormRegistrazione -> RegistrazioneControl : richiediModulo()
+RegistrazioneControl --> FormRegistrazione : mostraModulo()
+Utente -> FormRegistrazione : inserisceDati()
+FormRegistrazione -> RegistrazioneControl : registra(dati)
+RegistrazioneControl -> Account : create(dati)
+
+' Onboarding: scelta del ruolo e creazione del Giocatore
+RegistrazioneControl -> FormOnboarding : avviaOnboarding()
+Utente -> FormOnboarding : selezionaRuolo()
+FormOnboarding -> RegistrazioneControl : confermaRuolo()
+create entity Giocatore
+RegistrazioneControl -> Giocatore : create()
+
+' Configurazione della Player Card e accesso alla Dashboard
+RegistrazioneControl -> FormPlayerCard : mostraConfigurazione()
+Utente -> FormPlayerCard : inserisceDatiPlayerCard()
+FormPlayerCard -> RegistrazioneControl : salvaPlayerCard()
+RegistrazioneControl -> Giocatore : aggiornaDati()
+RegistrazioneControl -> Dashboard : mostraDashboard()
+@enduml

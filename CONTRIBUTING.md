@@ -40,6 +40,14 @@ Esempi **non** validi: `login` (manca tutto), `feature/login` (manca la chiave),
 `feature/kck-60-login` (chiave minuscola), `Feature/KCK-60` (tipo maiuscolo),
 `feature/KCK60-login` (manca il trattino nella chiave).
 
+**Eccezione: branch creati da un'IA.** Se il branch lo crea un assistente IA
+collegato a GitHub (Codex, Claude, Copilot), il nome inizia con `codex/`,
+`claude/` o `copilot/` e non contiene la chiave: e' ammesso, ma allora il
+**titolo della PR** deve iniziare con la chiave del ticket, es.
+`KCK-235: crea partita` (e' il titolo che collega la PR a Jira). Se correggi il
+titolo dopo aver aperto la PR, chiudi e riapri la PR (Close / Reopen) oppure fai
+un nuovo push: il pulsante Re-run rilegge il titolo vecchio.
+
 **Perche' e' obbligatoria.** Grazie all'app *GitHub for Atlassian* (vedi
 sezione 3), la chiave nel nome del branch fa comparire in automatico branch,
 commit e pull request dentro il ticket Jira, nel pannello **Sviluppo**: i PM
@@ -119,6 +127,9 @@ git push                                         # le volte successive
 
 Se il lavoro non e' finito ma vuoi un parere, apri la PR come **Draft**.
 
+> Lavori con un agente (Claude Code, Copilot)? Le fasi da seguire (piano,
+> implementazione, test, revisione) sono in [`docs/pm/pipeline-agenti.md`](docs/pm/pipeline-agenti.md).
+
 ### Passo 6 — Review
 
 - Chi revisiona legge il codice/documento, lo prova e lascia commenti. Alla fine
@@ -126,11 +137,15 @@ Se il lavoro non e' finito ma vuoi un parere, apri la PR come **Draft**.
 - Se ricevi richieste di modifica: correggi sullo **stesso branch**, fai commit e
   `git push`. La PR si aggiorna da sola. Rispondi ai commenti e segnali come
   risolti.
-- Servono **1 approvazione** e la **CI verde** per fare il merge.
+- Servono l'**approvazione di un PM** (Mario Celzo o Renato Mancino) e la **CI verde**
+  per fare il merge. I compagni possono revisionare e commentare, ma l'approvazione
+  che sblocca il merge e' quella di un PM; la PR aperta da un PM la approva l'altro.
+- Se la PR tocca entity condivise del class diagram o repository/migration, aggiungi
+  come revisore anche il referente (Francesco Nuzzolo o Pietro Senatore, vedi `.github/CODEOWNERS`).
 
 ### Passo 7 — Merge e chiusura
 
-1. Chi ha aperto la PR fa **Squash and merge** quando ha approvazione e CI verde.
+1. Chi ha aperto la PR fa **Squash and merge** quando ha l'approvazione di un PM e la CI verde.
 2. Cancella il branch remoto (GitHub propone il pulsante).
 3. Sposta il ticket Jira in **Fatto**.
 4. In locale:
@@ -185,7 +200,7 @@ branch non compare, quasi sempre la chiave nel nome e' sbagliata.
 Un ticket e' **Fatto** solo se:
 
 - [ ] tutti i criteri di accettazione del ticket sono rispettati;
-- [ ] il lavoro e' in una PR mergiata in `develop`, con almeno 1 approvazione;
+- [ ] il lavoro e' in una PR mergiata in `develop`, approvata da un PM;
 - [ ] la CI e' verde (nome del branch, formattazione, analisi, test, build);
 - [ ] il codice nuovo ha i suoi test (unit o widget) e i commenti dove servono;
 - [ ] i documenti toccati (RAD/SDD/ODD/matrice di tracciabilita') sono aggiornati;

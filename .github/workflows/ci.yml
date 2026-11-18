@@ -20,6 +20,9 @@ name: CI
 on:
   pull_request:
     branches: [develop, main]
+    # ready_for_review: la CI riparte quando una PR in bozza (Draft) viene
+    # segnata pronta, cosi' la revisione parte sempre da un esito aggiornato.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [develop, main]
   # Permette di rilanciare la CI a mano dalla tab "Actions".
@@ -56,6 +59,8 @@ jobs:
           # Passato via env e non interpolato nello script: il nome del branch
           # e' scelto da chi apre la PR, quindi non e' un input fidato.
           BRANCH: ${{ github.head_ref }}
+          # Anche il titolo e' scelto da chi apre la PR: passato via env.
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
           # Eccezioni: la PR di release settimanale (develop -> main) e le PR
           # automatiche di Dependabot.
@@ -63,14 +68,86 @@ jobs:
             echo "Branch '$BRANCH': eccezione ammessa."
             exit 0
           fi
+          # Branch creati dagli assistenti IA collegati a GitHub (Codex, Claude,
+          # Copilot): il nome lo sceglie l'IA, quindi la chiave Jira deve stare
+          # all'inizio del TITOLO della PR ("KCK-<n>: ..."). GitHub for Atlassian
+          # collega la PR al ticket anche dal titolo.
+          if [[ "$BRANCH" =~ ^(codex|claude|copilot)/ ]]; then
+            if [[ "$TITLE" =~ ^KCK-[0-9]+:\  ]]; then
+              echo "Branch '$BRANCH' creato da un'IA, titolo con la chiave Jira: ammesso."
+              exit 0
+            fi
+            echo "::error::Il branch '$BRANCH' e' stato creato da un'IA: il titolo della PR deve iniziare con la chiave Jira, es. 'KCK-235: crea partita'. Correggi il titolo, poi chiudi e riapri la PR (Close / Reopen) oppure fai un nuovo push: il Re-run usa il titolo vecchio."
+            exit 1
+          fi
           # Tipo + chiave Jira obbligatori; dopo la chiave, un separatore e
           # poi qualsiasi descrizione (oppure niente).
           if [[ "$BRANCH" =~ ^(feature|fix|chore|docs)/KCK-[0-9]+([-_].*)?$ ]]; then
             echo "Branch '$BRANCH': nome valido."
           else
-            echo "::error::Il branch '$BRANCH' non rispetta la regola <tipo>/KCK-<numero>-<descrizione> (tipo: feature, fix, chore, docs). Vedi CONTRIBUTING.md, sezione 1, e la sezione 7 per rinominarlo."
+            echo "::error::Il branch '$BRANCH' non rispetta la regola <tipo>/KCK-<numero>-<descrizione> (tipo: feature, fix, chore, docs), oppure un branch codex/, claude/ o copilot/ con il titolo della PR che inizia con 'KCK-<n>: '. Vedi CONTRIBUTING.md, sezione 1, e la sezione 7 per rinominarlo."
             exit 1
           fi
+
+  # Controlli sul lavoro con gli agenti (linee guida "Agentic Workflow"):
+  #  1. DG9 dell'SDD: nessun SDK di Supabase/FCM/Stripe nei livelli Presentation
+  #     e Domain (solo il livello Data e lib/core possono usarli). Fallisce la PR.
+  #  2. Avviso (non blocca) se la PR modifica o cancella test GIA' esistenti:
+  #     e' il segnale tipico di un agente che "aggiusta" i test per farli passare.
+  agentic-checks:
+    name: Controlli DG9 e test modificati
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Serve la storia per confrontare il branch con la base della PR.
+          fetch-depth: 0
+
+      - name: DG9 - nessun SDK esterno in presentation/domain
+        run: |
+          # Se la cartella non esiste ancora (prima dell'EN-1) il controllo passa.
+          dirs=$(find lib/features -type d \( -name presentation -o -name domain \) 2>/dev/null || true)
+          if [ -z "$dirs" ]; then echo "Nessuna cartella presentation/domain: niente da controllare."; exit 0; fi
+          # shellcheck disable=SC2086
+          if grep -rnE "package:(supabase_flutter|supabase|firebase_[a-z_]+|flutter_stripe)/" $dirs; then
+            echo "::error::DG9 violato: SDK esterni importati in presentation/domain. Usa un Repository nel livello data (vedi AGENTS.md)."
+            exit 1
+          fi
+          echo "DG9 rispettato."
+
+      - name: Avviso su test esistenti modificati
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          # M = modificato, D = cancellato, R = rinominato (A = nuovo, ok).
+          changed=$(git diff --name-status "origin/$BASE...HEAD" -- test | grep -E '^(M|D|R)' || true)
+          if [ -n "$changed" ]; then
+            echo "::warning::Questa PR modifica o cancella test esistenti. Spiega il motivo nel template della PR."
+            echo "$changed"
+          else
+            echo "Nessun test esistente modificato."
+          fi
+
+      # Avviso (non blocca) se la PR cambia le dipendenze: ogni libreria nuova va
+      # approvata da un PM (esiste davvero? e' mantenuta? licenza compatibile?).
+      - name: Avviso su dipendenze modificate
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if git diff --quiet "origin/$BASE...HEAD" -- pubspec.yaml; then
+            echo "Nessuna dipendenza modificata."
+          else
+            echo "::warning::Questa PR modifica pubspec.yaml: le nuove dipendenze vanno approvate da un PM (vedi AGENTS.md)."
+            git diff "origin/$BASE...HEAD" -- pubspec.yaml
+          fi
+
+      # Tabella "test frame -> test" nel riepilogo del run (non blocca):
+      # mostra quali frame della category partition non hanno ancora un test.
+      - name: Tracciabilita' test frame
+        run: bash scripts/tracciabilita.sh >> "$GITHUB_STEP_SUMMARY"
 
   analyze-and-test:
     name: Formattazione, analisi e test

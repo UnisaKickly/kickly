@@ -53,17 +53,48 @@ flutter pub get
 flutter run -d chrome
 ```
 
-### 3. Configurazione (Supabase)
+### 3. Configurazione
 
-Le chiavi **non** si committano. Copia il modello e inserisci i valori che
-trovi nel progetto Supabase (Settings → API):
+L'app si collega al progetto Supabase del team (**kickly**, organizzazione
+`UnisaKickly`, regione Central EU). URL e chiave **non** si committano: vivono
+solo nel tuo `config.json` locale, che e' gia' in `.gitignore`.
+
+1. Copia il modello:
+
+   ```bash
+   cp config.example.json config.json
+   ```
+
+2. Apri il dashboard di Supabase → progetto **kickly** → **Project Settings →
+   API Keys** (o **API**) e copia in `config.json`:
+   - `SUPABASE_URL`: l'URL del progetto (`https://<id-progetto>.supabase.co`);
+   - `SUPABASE_ANON_KEY`: la chiave **publishable / anon** (pubblica).
+
+   **Mai** la chiave `secret` / `service_role`: aggira le RLS e non deve
+   finire ne' nell'app ne' nel repo.
+
+3. Avvia l'app passando il file:
+
+   ```bash
+   flutter run -d chrome --dart-define-from-file=config.json
+   ```
+
+   Senza `--dart-define-from-file` l'app non si collega a Supabase e mostra
+   "Configurazione mancante: avvia con --dart-define-from-file=config.json"
+   (e' anche il caso della CI, che non ha `config.json`).
+
+**Supabase CLI (opzionale, serve per migration e backend locale).** La cartella
+`supabase/` contiene `config.toml`, creato con `supabase init`. Per collegare
+la CLI al progetto remoto:
 
 ```bash
-cp config.example.json config.json
-flutter run -d chrome --dart-define-from-file=config.json
+supabase login
+supabase link --project-ref zwnmtoygwwiajffufqqc
 ```
 
-`config.json` e' gia' in `.gitignore`.
+Se `supabase link` chiede la password del database, chiedila a un PM. URL,
+chiavi e password si condividono solo su un canale privato (es. gestore di
+password del team): mai nel repo, nei commit, nelle PR o su Jira.
 
 ## Comandi utili
 

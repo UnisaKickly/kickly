@@ -49,8 +49,20 @@ jobs:
 
       # Su GitHub Pages l'app non sta nella radice del dominio ma in
       # /<nome-repo>/: --base-href dice a Flutter dove trovare i suoi file.
+      # URL e chiave publishable/anon di Supabase arrivano dai secret del
+      # repository (Settings -> Secrets and variables -> Actions): senza, l'app
+      # pubblicata mostrerebbe "Configurazione mancante" (vedi main.dart).
+      # Passati via env e non interpolati nel comando, come in ci.yml.
+      # La CI (ci.yml) invece resta senza chiavi: i test non le usano.
       - name: Compila l'app web
-        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: >-
+          flutter build web --release
+          --base-href "/${{ github.event.repository.name }}/"
+          --dart-define=SUPABASE_URL="$SUPABASE_URL"
+          --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
       - name: Prepara l'artifact per Pages
         uses: actions/upload-pages-artifact@v5
@@ -96,8 +108,15 @@ jobs:
 
       # APK firmato con la chiave di debug: va bene per installarlo sui
       # telefoni del team, NON per pubblicarlo sul Play Store.
+      # Stessi secret della build web: l'APK si collega al progetto Supabase.
       - name: Compila l'APK
-        run: flutter build apk --release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: >-
+          flutter build apk --release
+          --dart-define=SUPABASE_URL="$SUPABASE_URL"
+          --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
       - name: Carica l'APK come artifact
         uses: actions/upload-artifact@v7

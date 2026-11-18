@@ -1,0 +1,47 @@
+' Sequence diagram SD_UC_PAG_1 (Pagamento della quota).
+' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 51 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Serve a fissare l'ordine delle chiamate del pagamento della quota, della conferma
+' della prenotazione e dell'accredito al gestore, da cui si ricavano le firme dei
+' metodi di GestioneTransazioniControl.
+' Nomi, messaggi e ordine sono quelli del RAD: non correggere qui, segnalare nel ticket.
+@startuml SD_UC_PAG_1
+title SD_UC_PAG_1 (Pagamento della quota)
+autonumber
+skinparam sequenceMessageAlign left
+
+actor Giocatore
+boundary InterfacciaPagamento
+control GestioneTransazioniControl
+entity Quota
+entity Transazione
+boundary GatewayPagamenti
+actor "Gestore\ndel Campo" as GestoreDelCampo
+
+' Riepilogo della quota da versare
+Giocatore -> InterfacciaPagamento : selezionaPagaQuota()
+InterfacciaPagamento -> GestioneTransazioniControl : richiediRiepilogo()
+GestioneTransazioniControl -> Quota : leggiQuota()
+Quota --> GestioneTransazioniControl : datiQuota
+GestioneTransazioniControl --> InterfacciaPagamento : riepilogo()
+InterfacciaPagamento --> Giocatore : mostraRiepilogo()
+
+' Pagamento tramite il gateway e registrazione del versamento
+Giocatore -> InterfacciaPagamento : confermaPagamento()
+InterfacciaPagamento -> GestioneTransazioniControl : avviaPagamento()
+GestioneTransazioniControl -> GatewayPagamenti : richiediPagamento()
+Giocatore -> GatewayPagamenti : completaPagamento()
+GatewayPagamenti --> GestioneTransazioniControl : esitoPositivo
+GestioneTransazioniControl -> Quota : registraVersamento()
+GestioneTransazioniControl -> Transazione : creaTransazione()
+GestioneTransazioniControl --> InterfacciaPagamento : versamentoRegistrato()
+InterfacciaPagamento --> Giocatore : mostraConferma()
+
+' Conferma della prenotazione, accredito al gestore e notifica
+GestioneTransazioniControl -> GestioneTransazioniControl : confermaPrenotazione()
+GestioneTransazioniControl -> GatewayPagamenti : disponiAccredito()
+GatewayPagamenti --> GestioneTransazioniControl : esitoAccredito
+GestioneTransazioniControl -> Transazione : creaTransazione()
+GestioneTransazioniControl --> InterfacciaPagamento : partitaConfermata
+InterfacciaPagamento --> Giocatore : mostraPartitaConfermata()
+GestioneTransazioniControl -> GestoreDelCampo : notificaConferma()
+@enduml

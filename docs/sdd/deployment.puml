@@ -1,0 +1,72 @@
+@startuml
+' Deployment diagram di Kickly (SDD v1.0, §3.3.1): mapping hardware/software.
+' Due nodi (smartphone dell'utente e cloud Supabase) piu' tre servizi esterni:
+' Stripe Connect, Firebase Cloud Messaging e servizio email.
+title Kickly - Deployment diagram (SDD §3.3.1)
+
+node "Smartphone del Giocatore / Gestore del Campo" <<device>> as Smartphone {
+  ' Flutter Runtime e Secure Storage stanno dentro il sistema operativo (Android / iOS).
+  node "Android / iOS" <<executionEnvironment>> as MobileOS {
+    node "Flutter Runtime (Dart)" <<executionEnvironment>> as Flutter {
+      artifact "Kickly (APK / IPA)" <<artifact>> as KicklyArtifact
+      component "Presentation Layer\n(boundary)" as GUI
+      component "Domain Layer\n(control, entity)" as Domain
+      component "Data Layer\n(Repository)" as Data
+      component "supabase_flutter SDK" as SupabaseFlutter
+      component "firebase_messaging SDK" as FirebaseMessaging
+
+      GUI --> Domain
+      Domain --> Data
+      Data --> SupabaseFlutter
+      Data --> FirebaseMessaging
+    }
+    component "Secure Storage\n(token di sessione)" as SecureStorage
+  }
+}
+
+node "Supabase Cloud (BaaS)" <<device>> as SupabaseCloud {
+  node "Supabase Platform" <<executionEnvironment>> as SupabasePlatform {
+    database "PostgreSQL\n(Row Level Security)" as Postgres
+    ' Il client raggiunge i dati dall'API Gateway, mai direttamente dal database.
+    component "API Gateway\n(REST / PostgREST)" as APIGateway
+    component "Supabase Auth" as Auth
+    component "Realtime" as Realtime
+    node "Edge Functions (Deno)" <<executionEnvironment>> as EdgeFunctions {
+      component "Gestione RSVP\n(contatore posti)" as EdgeRSVP
+      component "Pagamenti e webhook Stripe" as EdgePagamenti
+      component "Cancellazione account\n(GDPR)" as EdgeCancellazione
+      component "Invio notifiche" as EdgeNotifiche
+      component "Invio email di allerta" as EdgeEmail
+    }
+
+    APIGateway --> Postgres
+    EdgeFunctions --> Postgres
+  }
+}
+
+' Servizi esterni raggiunti solo da Edge Functions / Auth (server) o dal Checkout.
+node "Stripe Connect" <<device>> as Stripe {
+  component "Stripe API / Checkout" as StripeAPI
+}
+
+node "Firebase Cloud Messaging" <<device>> as FCM {
+  component "FCM HTTP v1" as FCMService
+}
+
+node "Servizio Email" <<device>> as Email {
+  component "SMTP / API email" as EmailService
+}
+
+' Comunicazione client <-> server.
+Smartphone --> APIGateway : <<protocol>> HTTPS (REST / JSON)
+Smartphone --> Realtime : <<protocol>> WSS (Realtime)
+Smartphone --> StripeAPI : <<protocol>> HTTPS (Checkout)
+
+' Collegamenti dal server verso i servizi esterni.
+EdgePagamenti --> StripeAPI : <<protocol>> HTTPS (API REST, webhook)
+EdgeNotifiche --> FCMService : <<protocol>> HTTPS
+EdgeEmail --> EmailService : <<protocol>> HTTPS (API email)
+FCMService --> Smartphone : <<protocol>> Push (TLS)
+Auth --> EmailService : <<protocol>> SMTP (TLS)
+
+@enduml

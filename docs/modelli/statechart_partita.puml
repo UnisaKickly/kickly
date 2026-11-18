@@ -1,0 +1,30 @@
+' Statechart SCD_PAR_StatoPartita (Stati della partita).
+' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 52 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Definisce i valori ammessi di Partita.stato e le transizioni tra di essi
+' (evento [guardia] / azione), usati da migration, entity e Control della partita.
+' Stati, eventi, guardie e azioni sono quelli del RAD: non correggere qui, segnalare nel ticket.
+@startuml SCD_PAR_StatoPartita
+title SCD_PAR_StatoPartita
+hide empty description
+
+state Aperta
+state Completa
+state Confermata
+state Conclusa
+state Annullata
+
+[*] --> Aperta : creazione partita
+
+Aperta --> Completa : adesione [numero\nrichiesto raggiunto]
+Completa --> Aperta : ritiro presenza [si\nlibera un posto]
+Completa --> Confermata : pagamento [tutte le\nquote versate] /\nconfermaPartita()
+Confermata --> Conclusa : conclusione\ndella partita
+
+Aperta --> Annullata : annullamento organizzatore\n[entro termine] /\ngestisciAnnullamento()
+Completa --> Annullata : annullamento organizzatore\n[entro termine] /\ngestisciAnnullamento()
+Completa --> Annullata : scadenza pagamento\n[quote mancanti] /\ngestisciAnnullamento()
+Confermata --> Annullata : annullamento organizzatore\n[entro termine] /\ngestisciAnnullamento()
+
+Conclusa --> [*] : / avviaPostPartita()
+Annullata --> [*]
+@enduml
