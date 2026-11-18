@@ -12,12 +12,14 @@ agente automatico e' il revisore Gemini (`.github/workflows/gemini-review.yml`,
 KCK-265): usa una chiave GRATUITA di Google AI Studio nel secret `GEMINI_API_KEY`,
 senza fatturazione collegata, legge la diff e pubblica un commento con le differenze
 rispetto ai modelli. Non approva, non modifica file e non apre issue.
-Copilot e' il revisore principale (richiesto su ogni PR): Gemini **subentra solo
-quando Copilot dice di non poter rivedere la PR per quota finita**; quando la quota di
-Copilot si resetta torna a lavorare Copilot e Gemini non parte. Gemini si puo' anche
-chiamare a mano aggiungendo l'etichetta `gemini-review`. Riguarda solo PR del team
-(non da fork, non in bozza), salta quelle di sola documentazione, ha un tetto
-giornaliero (variabile `GEMINI_DAILY_LIMIT`, predefinito 30) e, se la quota gratuita
+Copilot e' il revisore principale, Gemini la riserva: alla apertura di una PR (o quando
+una bozza e' segnata pronta) Gemini aspetta fino a ~6 minuti una review vera di Copilot;
+se arriva non fa nulla, se Copilot non e' stato richiesto o ha la quota finita la fa
+Gemini. Copilot rivede una PR solo se qualcuno lo richiede (impostazione personale o
+regola "Automatically request Copilot code review" nel ruleset) e consuma la quota di chi
+lo richiede. Gemini si puo' anche chiamare a mano con l'etichetta `gemini-review` (parte
+subito). Riguarda solo PR del team (non da fork, non in bozza), salta quelle di sola
+documentazione, ha un tetto giornaliero (variabile `GEMINI_DAILY_LIMIT`, predefinito 30) e, se la quota gratuita
 di Google finisce, semplicemente non commenta.
 Per scrivere il codice ognuno usa l'assistente IA che preferisce, con il proprio account:
 

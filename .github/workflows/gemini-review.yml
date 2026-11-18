@@ -7,14 +7,18 @@
 # NON apre issue: l'approvazione resta di un PM (CODEOWNERS).
 #
 # Quando parte (Copilot e' il revisore principale, Gemini e' la riserva):
-#   - Copilot rivede ogni PR in automatico finche' ha quota. Quando la quota
-#     finisce, Copilot pubblica una review che dice "unable to review": a quel
-#     punto parte Gemini. Quando la quota di Copilot si resetta, torna a
-#     lavorare lui e Gemini non parte. Gemini non rivede due volte lo stesso
-#     commit di una PR;
-#   - a richiesta, aggiungendo l'etichetta `gemini-review` alla PR (utile per
-#     rifare la review dopo le correzioni); Copilot e Gemini restano
-#     indipendenti.
+#   - all'apertura di una PR (non in bozza) o quando una bozza e' segnata pronta
+#     Gemini aspetta fino a ~6 minuti una review VERA di Copilot; se arriva non
+#     fa nulla. Se Copilot non e' stato richiesto, non risponde o ha la quota
+#     finita ("unable to review"), la review la fa Gemini. Quando la quota di
+#     Copilot si resetta e Copilot e' richiesto, Gemini non parte. Gemini non
+#     rivede due volte lo stesso commit;
+#   - a richiesta, aggiungendo l'etichetta `gemini-review` (parte subito, senza
+#     attendere Copilot).
+#
+# NOTA: Copilot rivede una PR solo se qualcuno lo richiede (impostazione
+# personale oppure regola "Automatically request Copilot code review" nel
+# ruleset) e consuma la quota di chi lo richiede.
 #
 # Sicurezza (PDF, pag. 100):
 #   - parte solo per PR del team (OWNER/MEMBER/COLLABORATOR) e solo se il branch
@@ -44,16 +48,13 @@
 name: Gemini review
 
 on:
-  # 1) Subentro: Copilot e' il revisore principale (richiesto in automatico su
-  #    ogni PR). Se ha finito la quota pubblica una review che dice che non ha
-  #    potuto rivedere la PR: a quel punto parte Gemini. Quando la quota di
-  #    Copilot si resetta, la sua review torna a funzionare e Gemini non parte.
-  pull_request_review:
-    types: [submitted]
-  # 2) A richiesta: aggiungendo l'etichetta `gemini-review` a una PR.
+  # Alla apertura di una PR e quando una bozza viene segnata pronta Gemini
+  # aspetta qualche minuto una review VERA di Copilot: se arriva, non fa nulla;
+  # se non arriva (Copilot non richiesto o quota finita) la fa Gemini.
+  # Con l'etichetta `gemini-review` la review parte subito, senza attese.
   pull_request:
     branches: [develop, main]
-    types: [labeled]
+    types: [opened, ready_for_review, labeled]
 
 # Una sola esecuzione per PR: se parte una seconda, annulla la prima.
 concurrency:
@@ -78,14 +79,9 @@ jobs:
       !startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) &&
-      (
-        (github.event_name == 'pull_request' && github.event.label.name == 'gemini-review') ||
-        (github.event_name == 'pull_request_review' &&
-         github.event.review.user.login == 'copilot-pull-request-reviewer[bot]' &&
-         contains(github.event.review.body, 'unable to review'))
-      )
+      (github.event.action != 'labeled' || github.event.label.name == 'gemini-review')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     # Non e' un controllo obbligatorio: se Gemini ha un problema (quota, rete)
     # non deve bloccare il merge.
     continue-on-error: true
@@ -110,7 +106,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.ref }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
-          EVENT: ${{ github.event_name }}
+          ACTION: ${{ github.event.action }}
         run: |
           set -euo pipefail
           # 1) PR di sola documentazione: niente codice da confrontare con i
@@ -121,10 +117,9 @@ jobs:
             echo "::notice::PR di sola documentazione: nessuna review Gemini."
             exit 0
           fi
-          # 2) Subentro dopo Copilot: se questa versione della PR (commit) e' gia'
-          #    stata rivista da Gemini non si rifa' (Copilot puo' ripetere il
-          #    messaggio di quota piu' volte). Con l'etichetta invece si rifa'.
-          if [ "$EVENT" = "pull_request_review" ]; then
+          # 2) Se questa versione della PR (commit) e' gia' stata rivista da Gemini
+          #    non si rifa'. Con l'etichetta invece si rifa' sempre.
+          if [ "$ACTION" != "labeled" ]; then
             commenti=$(gh pr view "$PR" --json comments --jq '.comments[].body' || true)
             if grep -q "gemini-review:$SHA" <<<"$commenti"; then
               echo "ok=false" >> "$GITHUB_OUTPUT"
@@ -147,11 +142,53 @@ jobs:
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Copilot per primo: se entro qualche minuto arriva una sua review VERA
+      # (cioe' non il messaggio "unable to review" per quota finita) Gemini non
+      # fa nulla. Se Copilot non e' stato richiesto o ha la quota finita, la
+      # review la fa Gemini. Con l'etichetta non si aspetta.
+      # TENTATIVI x PAUSA = attesa massima (predefinita 8 x 45 s = 6 minuti).
+      - name: Aspetta la review di Copilot
+        id: copilot
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+          TENTATIVI: ${{ vars.GEMINI_ATTESA_TENTATIVI || '8' }}
+          PAUSA: ${{ vars.GEMINI_ATTESA_PAUSA || '45' }}
+        run: |
+          set -euo pipefail
+          if [ "$ACTION" = "labeled" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          for i in $(seq 1 "$TENTATIVI"); do
+            # Review di Copilot gia' presenti (bot copilot-pull-request-reviewer).
+            reviews=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
+              --jq '[.[] | select(.user.login=="copilot-pull-request-reviewer[bot]")] | map(.body // "")' | jq -s 'add // []')
+            vere=$(jq '[.[] | select(test("unable to review") | not)] | length' <<<"$reviews")
+            fallite=$(jq '[.[] | select(test("unable to review"))] | length' <<<"$reviews")
+            if [ "$vere" -gt 0 ]; then
+              echo "ok=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Copilot ha gia' rivisto la PR: Gemini non serve."
+              exit 0
+            fi
+            if [ "$fallite" -gt 0 ]; then
+              echo "ok=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Copilot non puo' rivedere (quota finita): subentra Gemini."
+              exit 0
+            fi
+            echo "Nessuna review di Copilot ancora (tentativo $i di $TENTATIVI)..."
+            sleep "$PAUSA"
+          done
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Copilot non ha risposto in tempo (non richiesto?): subentra Gemini."
+
       # Prepara il testo da dare al modello: istruzioni del revisore, regole del
       # progetto e diff della PR (tagliata se troppo lunga).
       - name: Prepara il prompt
         id: ctx
-        if: steps.guard.outputs.ok == 'true'
+        if: steps.guard.outputs.ok == 'true' && steps.copilot.outputs.ok == 'true'
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
           # Titolo e descrizione li sceglie chi apre la PR: passati via env e
@@ -203,7 +240,7 @@ jobs:
 
       - name: Review con Gemini
         id: gemini
-        if: steps.guard.outputs.ok == 'true'
+        if: steps.guard.outputs.ok == 'true' && steps.copilot.outputs.ok == 'true'
         # Versione fissata (v0.1.22) per non ricevere modifiche a sorpresa.
         uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489
         with:
@@ -222,7 +259,7 @@ jobs:
       # Pubblica la risposta come commento della PR. Il testo passa da una
       # variabile d'ambiente e da un file: mai interpolato nello script.
       - name: Pubblica il commento
-        if: steps.guard.outputs.ok == 'true' && steps.gemini.outputs.summary != ''
+        if: steps.guard.outputs.ok == 'true' && steps.copilot.outputs.ok == 'true' && steps.gemini.outputs.summary != ''
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
@@ -233,7 +270,7 @@ jobs:
             echo "<!-- gemini-review:$SHA -->"
             echo "### Review automatica (Gemini)"
             echo
-            echo "_Elenco di differenze rispetto ai modelli e alle regole di AGENTS.md (Gemini subentra quando Copilot non puo' rivedere). Non e' un'approvazione: serve la revisione di una persona. Per rifarla dopo le correzioni aggiungi l'etichetta \`gemini-review\`._"
+            echo "_Elenco di differenze rispetto ai modelli e alle regole di AGENTS.md (Gemini subentra quando Copilot non ha rivisto la PR). Non e' un'approvazione: serve la revisione di una persona. Per rifarla dopo le correzioni aggiungi l'etichetta \`gemini-review\`._"
             echo
             printf '%s\n' "$REVIEW"
           } > commento.md
