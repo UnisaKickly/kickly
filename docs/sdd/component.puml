@@ -1,92 +1,100 @@
 @startuml
-title KCK-213 - Component diagram dell'applicazione Kickly
-
-' Questo diagramma mostra i sottosistemi dell'SDD v1.0.
-' Ogni sottosistema separa GUI, Control e Repository secondo
-' Presentation / Domain / Data, come richiesto da AGENTS.md.
 package "Gestione Utenza" {
-  component "Presentation\nBoundary GUI" as UtenzaGUI
-  component "Domain\nGestione Utenza Control" as UtenzaControl
-  component "Data\nAccount Repository" as UtenzaRepository
-  UtenzaGUI --> UtenzaControl
+  component "Presentation\nGestioneUtenzaGUI" as UtenzaGUI
+  component "Domain\nGestioneUtenzaControl" as UtenzaControl
+  component "Data\nAccountRepository" as UtenzaRepository
+  interface "IGestioneUtenza" as IUtenza
+  UtenzaGUI --() IUtenza
+  IUtenza -- UtenzaControl
   UtenzaControl --> UtenzaRepository
 }
 
-package "Gestione Leghe" {
-  component "Presentation\nBoundary GUI" as LegheGUI
-  component "Domain\nGestione Lega Control" as LegheControl
-  component "Data\nLega Repository" as LegheRepository
-  LegheGUI --> LegheControl
+package "Gestione Leghe e Inviti" {
+  component "Presentation\nGestioneLegheGUI" as LegheGUI
+  component "Domain\nGestioneLegheControl" as LegheControl
+  component "Data\nLegaRepository" as LegheRepository
+  interface "IGestioneLeghe" as ILeghe
+  LegheGUI --() ILeghe
+  ILeghe -- LegheControl
   LegheControl --> LegheRepository
 }
 
 package "Gestione Rete Sociale e Sicurezza" {
-  component "Presentation\nBoundary GUI" as ReteSicurezzaGUI
-  component "Domain\nGestione Rete Sociale\nGestione Sicurezza" as ReteSicurezzaControl
-  component "Data\nRepository rete sociale\nRepository sicurezza" as ReteSicurezzaRepository
-  ReteSicurezzaGUI --> ReteSicurezzaControl
+  component "Presentation\nGestioneReteSocialeSicurezzaGUI" as ReteSicurezzaGUI
+  component "Domain\nGestioneReteSocialeSicurezzaControl" as ReteSicurezzaControl
+  component "Data\nDispositivoRepository" as ReteSicurezzaRepository
+  interface "IGestioneReteSocialeSicurezza" as IReteSicurezza
+  ReteSicurezzaGUI --() IReteSicurezza
+  IReteSicurezza -- ReteSicurezzaControl
   ReteSicurezzaControl --> ReteSicurezzaRepository
 }
 
 package "Gestione Partite e RSVP" {
-  component "Presentation\nBoundary GUI" as PartiteGUI
-  component "Domain\nGestione Partita Control" as PartiteControl
-  component "Data\nPartita Repository\nPartecipazione Repository" as PartiteRepository
-  PartiteGUI --> PartiteControl
+  component "Presentation\nGestionePartiteGUI" as PartiteGUI
+  component "Domain\nGestionePartiteControl" as PartiteControl
+  component "Data\nPartitaRepository\nPartecipazioneRepository\nPrenotazioneRepository" as PartiteRepository
+  interface "IGestionePartite" as IPartite
+  PartiteGUI --() IPartite
+  IPartite -- PartiteControl
   PartiteControl --> PartiteRepository
 }
 
 package "Gestione Strutture" {
-  component "Presentation\nBoundary GUI" as StruttureGUI
-  component "Domain\nGestione Strutture Control" as StruttureControl
-  component "Data\nCampo Repository\nPrenotazione Repository" as StruttureRepository
-  StruttureGUI --> StruttureControl
+  component "Presentation\nGestioneStruttureGUI" as StruttureGUI
+  component "Domain\nGestioneStruttureControl" as StruttureControl
+  component "Data\nCampoRepository" as StruttureRepository
+  interface "IGestioneStrutture" as IStrutture
+  StruttureGUI --() IStrutture
+  IStrutture -- StruttureControl
   StruttureControl --> StruttureRepository
 }
 
 package "Gestione Voto MVP e Notifiche" {
-  component "Presentation\nBoundary GUI" as VotoNotificheGUI
-  component "Domain\nGestione Voto MVP\nGestione Notifiche" as VotoNotificheControl
-  component "Data\nVotazione Repository\nNotifica Repository" as VotoNotificheRepository
-  VotoNotificheGUI --> VotoNotificheControl
+  component "Presentation\nGestioneVotoMVPNotificheGUI" as VotoNotificheGUI
+  component "Domain\nGestioneVotoMVPNotificheControl" as VotoNotificheControl
+  component "Data\nVotazioneRepository\nNotificaRepository" as VotoNotificheRepository
+  interface "IGestioneVotoMVPNotifiche" as IVotoNotifiche
+  VotoNotificheGUI --() IVotoNotifiche
+  IVotoNotifiche -- VotoNotificheControl
   VotoNotificheControl --> VotoNotificheRepository
 }
 
 package "Gestione Pagamenti" {
-  component "Presentation\nBoundary GUI" as PagamentiGUI
-  component "Domain\nGestione Pagamenti Control" as PagamentiControl
-  component "Data\nTransazione Repository\nQuota Repository" as PagamentiRepository
-  PagamentiGUI --> PagamentiControl
+  component "Presentation\nGestionePagamentiGUI" as PagamentiGUI
+  component "Domain\nGestionePagamentiControl" as PagamentiControl
+  component "Data\nTransazioneRepository\nQuotaRepository\nGatewayPagamenti" as PagamentiRepository
+  interface "IGestionePagamenti" as IPagamenti
+  PagamentiGUI --() IPagamenti
+  IPagamenti -- PagamentiControl
   PagamentiControl --> PagamentiRepository
 }
 
-' La Persistenza espone il client condiviso Supabase a tutti i repository.
 package "Persistenza" {
-  database "PostgreSQL\nSupabase" as PostgresPersistenza
-  component "SupabaseClient condiviso" as SupabaseClient
-  SupabaseClient --> PostgresPersistenza
+  component "Persistenza (SupabaseClient)" as PersistenzaClient
 }
 
-' Dipendenze ammesse tra sottosistemi dal diagramma SDD.
-UtenzaControl ..> LegheControl
+' Dipendenze tra sottosistemi dall'SDD §3.2.1.
 UtenzaControl ..> ReteSicurezzaControl
-UtenzaControl ..> StruttureControl : use
+UtenzaControl ..> StruttureControl : «use»\nonboarding Gestore
 LegheControl ..> PartiteControl
-LegheControl ..> StruttureControl
-ReteSicurezzaControl ..> UtenzaControl
+LegheControl ..> VotoNotificheControl
 ReteSicurezzaControl ..> PartiteControl
-ReteSicurezzaControl ..> VotoNotificheControl
 PartiteControl ..> StruttureControl
-PartiteControl ..> VotoNotificheControl
 PartiteControl ..> PagamentiControl
+StruttureControl ..> VotoNotificheControl
+PagamentiControl ..> VotoNotificheControl
 
+note bottom
+Le frecce di §3.2.1 sono collegate ai Control;
+esse rappresentano esplicitamente le dipendenze tra sottosistemi.
+end note
 ' I repository accedono esclusivamente attraverso la Persistenza.
-UtenzaRepository ..> SupabaseClient
-LegheRepository ..> SupabaseClient
-ReteSicurezzaRepository ..> SupabaseClient
-PartiteRepository ..> SupabaseClient
-StruttureRepository ..> SupabaseClient
-VotoNotificheRepository ..> SupabaseClient
-PagamentiRepository ..> SupabaseClient
+UtenzaRepository ..> PersistenzaClient
+LegheRepository ..> PersistenzaClient
+ReteSicurezzaRepository ..> PersistenzaClient
+PartiteRepository ..> PersistenzaClient
+StruttureRepository ..> PersistenzaClient
+VotoNotificheRepository ..> PersistenzaClient
+PagamentiRepository ..> PersistenzaClient
 
 @enduml

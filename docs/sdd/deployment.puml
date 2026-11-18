@@ -1,31 +1,38 @@
 @startuml
-title KCK-213 - Deployment diagram dell'applicazione Kickly
-
-' Il nodo smartphone ospita il client Flutter e i suoi strati applicativi.
-node "Smartphone" as Smartphone {
-  component "App Flutter Kickly" as Flutter {
-    component "Presentation\nBoundary GUI" as GUI
-    component "Domain\nControl ed Entity" as Domain
-    component "Data\nRepository" as Data
-    component "SupabaseClient condiviso" as SupabaseClient
+node "Smartphone" <<device>> as Smartphone {
+  node "Android / iOS" <<executionEnvironment>> as MobileOS {
+    component "Secure Storage\n(token di sessione)" as SecureStorage
+  }
+  node "Flutter Runtime (Dart)" <<executionEnvironment>> as Flutter {
+    artifact "Kickly (APK / IPA)" <<artifact>> as KicklyArtifact
+    component "Presentation Layer\n(boundary)" as GUI
+    component "Domain Layer\n(control, entity)" as Domain
+    component "Data Layer\n(Repository)" as Data
+    component "supabase_flutter SDK" as SupabaseFlutter
+    component "firebase_messaging SDK" as FirebaseMessaging
 
     GUI --> Domain
     Domain --> Data
-    Data --> SupabaseClient
+    Data --> SupabaseFlutter
+    Data --> FirebaseMessaging
   }
 }
 
-' Supabase fornisce i servizi backend condivisi dell'applicazione.
-cloud "Supabase Cloud" as SupabaseCloud {
-  database "PostgreSQL" as Postgres
+cloud "Supabase Cloud" <<executionEnvironment>> as SupabaseCloud {
+  database "PostgreSQL\n(Row Level Security)" as Postgres
+  component "API Gateway\n(REST / PostgREST)" as APIGateway
   component "Auth" as Auth
   component "Realtime" as Realtime
-  component "Edge Functions" as EdgeFunctions
+  node "Edge Functions (Deno)" <<executionEnvironment>> as EdgeFunctions {
+    component "RSVP" as EdgeRSVP
+    component "pagamenti / webhook Stripe" as EdgePagamenti
+    component "cancellazione account" as EdgeCancellazione
+    component "notifiche" as EdgeNotifiche
+    component "email di allerta" as EdgeEmail
+  }
 
-  Auth --> Postgres
-  Realtime --> Postgres
+  APIGateway --> Postgres
   EdgeFunctions --> Postgres
-  EdgeFunctions --> Auth
 }
 
 ' Stripe gestisce i pagamenti in modalita' test tramite Stripe Connect.
@@ -43,13 +50,14 @@ cloud "Servizio email" as Email {
   component "Invio email" as EmailService
 }
 
-' HTTPS collega il client Flutter ai servizi web e alle Edge Functions.
-SupabaseClient --> Auth : HTTPS
-SupabaseClient --> Postgres : HTTPS
-SupabaseClient --> EdgeFunctions : HTTPS
-SupabaseClient --> Realtime : WSS
-EdgeFunctions --> StripeAPI : HTTPS
-FCMService --> Smartphone : HTTPS
-Auth --> EmailService : HTTPS
+Smartphone --> SupabaseCloud : «protocol» HTTPS (REST / JSON)
+Smartphone --> SupabaseCloud : «protocol» WSS (Realtime)
+Smartphone --> Stripe : «protocol» HTTPS (Checkout)
+
+EdgePagamenti --> StripeAPI : HTTPS
+EdgeNotifiche --> FCMService : HTTPS
+EdgeEmail --> EmailService : HTTPS (API email)
+FCMService --> Smartphone : Push (TLS)
+Auth --> EmailService : SMTP (TLS)
 
 @enduml
