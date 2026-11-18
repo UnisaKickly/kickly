@@ -1,0 +1,55 @@
+@startuml
+title KCK-213 - Deployment diagram dell'applicazione Kickly
+
+' Il nodo smartphone ospita il client Flutter e i suoi strati applicativi.
+node "Smartphone" as Smartphone {
+  component "App Flutter Kickly" as Flutter {
+    component "Presentation\nBoundary GUI" as GUI
+    component "Domain\nControl ed Entity" as Domain
+    component "Data\nRepository" as Data
+    component "SupabaseClient condiviso" as SupabaseClient
+
+    GUI --> Domain
+    Domain --> Data
+    Data --> SupabaseClient
+  }
+}
+
+' Supabase fornisce i servizi backend condivisi dell'applicazione.
+cloud "Supabase Cloud" as SupabaseCloud {
+  database "PostgreSQL" as Postgres
+  component "Auth" as Auth
+  component "Realtime" as Realtime
+  component "Edge Functions" as EdgeFunctions
+
+  Auth --> Postgres
+  Realtime --> Postgres
+  EdgeFunctions --> Postgres
+  EdgeFunctions --> Auth
+}
+
+' Stripe gestisce i pagamenti in modalita' test tramite Stripe Connect.
+cloud "Stripe Connect" as Stripe {
+  component "API pagamenti" as StripeAPI
+}
+
+' FCM recapita le notifiche push al dispositivo.
+cloud "Firebase Cloud Messaging" as FCM {
+  component "Push notification" as FCMService
+}
+
+' Il servizio email consegna le comunicazioni e l'accesso via email.
+cloud "Servizio email" as Email {
+  component "Invio email" as EmailService
+}
+
+' HTTPS collega il client Flutter ai servizi web e alle Edge Functions.
+SupabaseClient --> Auth : HTTPS
+SupabaseClient --> Postgres : HTTPS
+SupabaseClient --> EdgeFunctions : HTTPS
+SupabaseClient --> Realtime : WSS
+EdgeFunctions --> StripeAPI : HTTPS
+FCMService --> Smartphone : HTTPS
+Auth --> EmailService : HTTPS
+
+@enduml

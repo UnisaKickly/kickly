@@ -1,0 +1,92 @@
+@startuml
+title KCK-213 - Component diagram dell'applicazione Kickly
+
+' Questo diagramma mostra i sottosistemi dell'SDD v1.0.
+' Ogni sottosistema separa GUI, Control e Repository secondo
+' Presentation / Domain / Data, come richiesto da AGENTS.md.
+package "Gestione Utenza" {
+  component "Presentation\nBoundary GUI" as UtenzaGUI
+  component "Domain\nGestione Utenza Control" as UtenzaControl
+  component "Data\nAccount Repository" as UtenzaRepository
+  UtenzaGUI --> UtenzaControl
+  UtenzaControl --> UtenzaRepository
+}
+
+package "Gestione Leghe" {
+  component "Presentation\nBoundary GUI" as LegheGUI
+  component "Domain\nGestione Lega Control" as LegheControl
+  component "Data\nLega Repository" as LegheRepository
+  LegheGUI --> LegheControl
+  LegheControl --> LegheRepository
+}
+
+package "Gestione Rete Sociale e Sicurezza" {
+  component "Presentation\nBoundary GUI" as ReteSicurezzaGUI
+  component "Domain\nGestione Rete Sociale\nGestione Sicurezza" as ReteSicurezzaControl
+  component "Data\nRepository rete sociale\nRepository sicurezza" as ReteSicurezzaRepository
+  ReteSicurezzaGUI --> ReteSicurezzaControl
+  ReteSicurezzaControl --> ReteSicurezzaRepository
+}
+
+package "Gestione Partite e RSVP" {
+  component "Presentation\nBoundary GUI" as PartiteGUI
+  component "Domain\nGestione Partita Control" as PartiteControl
+  component "Data\nPartita Repository\nPartecipazione Repository" as PartiteRepository
+  PartiteGUI --> PartiteControl
+  PartiteControl --> PartiteRepository
+}
+
+package "Gestione Strutture" {
+  component "Presentation\nBoundary GUI" as StruttureGUI
+  component "Domain\nGestione Strutture Control" as StruttureControl
+  component "Data\nCampo Repository\nPrenotazione Repository" as StruttureRepository
+  StruttureGUI --> StruttureControl
+  StruttureControl --> StruttureRepository
+}
+
+package "Gestione Voto MVP e Notifiche" {
+  component "Presentation\nBoundary GUI" as VotoNotificheGUI
+  component "Domain\nGestione Voto MVP\nGestione Notifiche" as VotoNotificheControl
+  component "Data\nVotazione Repository\nNotifica Repository" as VotoNotificheRepository
+  VotoNotificheGUI --> VotoNotificheControl
+  VotoNotificheControl --> VotoNotificheRepository
+}
+
+package "Gestione Pagamenti" {
+  component "Presentation\nBoundary GUI" as PagamentiGUI
+  component "Domain\nGestione Pagamenti Control" as PagamentiControl
+  component "Data\nTransazione Repository\nQuota Repository" as PagamentiRepository
+  PagamentiGUI --> PagamentiControl
+  PagamentiControl --> PagamentiRepository
+}
+
+' La Persistenza espone il client condiviso Supabase a tutti i repository.
+package "Persistenza" {
+  database "PostgreSQL\nSupabase" as PostgresPersistenza
+  component "SupabaseClient condiviso" as SupabaseClient
+  SupabaseClient --> PostgresPersistenza
+}
+
+' Dipendenze ammesse tra sottosistemi dal diagramma SDD.
+UtenzaControl ..> LegheControl
+UtenzaControl ..> ReteSicurezzaControl
+UtenzaControl ..> StruttureControl : use
+LegheControl ..> PartiteControl
+LegheControl ..> StruttureControl
+ReteSicurezzaControl ..> UtenzaControl
+ReteSicurezzaControl ..> PartiteControl
+ReteSicurezzaControl ..> VotoNotificheControl
+PartiteControl ..> StruttureControl
+PartiteControl ..> VotoNotificheControl
+PartiteControl ..> PagamentiControl
+
+' I repository accedono esclusivamente attraverso la Persistenza.
+UtenzaRepository ..> SupabaseClient
+LegheRepository ..> SupabaseClient
+ReteSicurezzaRepository ..> SupabaseClient
+PartiteRepository ..> SupabaseClient
+StruttureRepository ..> SupabaseClient
+VotoNotificheRepository ..> SupabaseClient
+PagamentiRepository ..> SupabaseClient
+
+@enduml
