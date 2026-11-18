@@ -2,7 +2,7 @@
 
 Tutti i documenti del progetto si scrivono qui, in Markdown, e passano da pull
 request come il codice (vedi [CONTRIBUTING.md](../CONTRIBUTING.md), sezione 6).
-Le PR che toccano `docs/` richiedono sempre l'approvazione dei Project Manager.
+Come ogni PR del repository, anche quelle che toccano `docs/` richiedono l'approvazione di un Project Manager.
 
 Per iniziare un nuovo documento copia [`_TEMPLATE.md`](_TEMPLATE.md).
 

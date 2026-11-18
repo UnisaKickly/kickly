@@ -1,0 +1,40 @@
+# Modulo per i difetti. Chi corregge un bug (a mano o con un agente) parte dal
+# test che fallisce (linee guida "Agentic Workflow", schema 2: instradamento).
+name: Bug
+description: Segnala un difetto trovato nell'app o in CI
+title: "KCK-: "
+labels: ["bug"]
+body:
+  - type: input
+    id: jira
+    attributes:
+      label: Ticket Jira
+      placeholder: KCK-300
+    validations:
+      required: true
+
+  - type: input
+    id: requisito
+    attributes:
+      label: Requisito o caso d'uso coinvolto
+      placeholder: RF_PAR_2, UC_PAR_1
+
+  - type: textarea
+    id: passi
+    attributes:
+      label: Passi per riprodurre
+    validations:
+      required: true
+
+  - type: textarea
+    id: atteso
+    attributes:
+      label: Esito atteso (dal caso d'uso) ed esito ottenuto
+    validations:
+      required: true
+
+  - type: textarea
+    id: test
+    attributes:
+      label: Test che fallisce (se c'e')
+      placeholder: test/features/partite/prenotazione_control_test.dart -> tf_par_04_...

@@ -8,7 +8,8 @@
 App mobile per organizzare partite di calcio amatoriale: leghe, RSVP, prenotazione
 del campo, quote in app (Stripe Connect, solo test), voto MVP, notifiche.
 La specifica e' NELLA REPO (`docs/`), ricavata da RAD v2.9 e SDD v1.0: non hai accesso
-al Drive, quindi se un'informazione non e' in `docs/` o nel ticket, chiedi.
+al Drive, quindi se un'informazione non e' in `docs/` o nel ticket, chiedi. Se un ticket cita
+"RAD v2.9 (Drive)" o "SDD v1.0 (Drive)", usa `docs/fonti/Kickly_RAD_v2.9.pdf` e `docs/fonti/Kickly_SDD_v1.0.pdf`.
 
 ## Stack e comandi
 Flutter 3.47.0 / Dart, Supabase (PostgreSQL + RLS, Auth, Realtime, Edge Functions in
@@ -44,7 +45,8 @@ Sempre:
 - lavora nel branch del ticket e dentro l'ambito scritto nel ticket;
 - proponi un piano (file e metodi) e aspetta l'approvazione di chi ha il ticket prima di scrivere codice;
 - se per il flusso non c'e' un sequence diagram, il piano indica l'ordine delle chiamate GUI -> Control -> Repository;
-- un test per ogni test frame (TF) elencato nel ticket, con il TF nel nome del test;
+- un test per ogni test frame (TF) elencato nel ticket, con l'id in minuscolo nel nome del test
+  (`TF_PAR_03` -> `tf_par_03_...`, regole in `docs/test/README.md`);
 - l'esito atteso di un test viene dal caso d'uso (`docs/rad/uc`), mai dal comportamento del codice;
 - se il codice richiede di cambiare un modello in `docs/`, aggiornalo nella STESSA PR e dichiaralo nel template.
 
@@ -67,11 +69,23 @@ se hai toccato `supabase/`); ogni TF del ticket ha un test; nessun file modifica
 dall'ambito approvato; PR compilata col template (RF/UC, artefatti, tentativi, esito del
 revisore, modifiche ai modelli); chi apre la PR sa spiegare ogni riga.
 
+## Come si lavora con un agente (dettagli in `docs/pm/pipeline-agenti.md`)
+Su GitHub non ci sono agenti automatici: si usa qualsiasi assistente (Codex, Claude Code, Copilot...), in
+locale o collegato a GitHub, sempre su un ticket Jira e su un branch partito da `develop`
+(`<tipo>/KCK-<n>-...`; se il branch lo crea l'IA, il titolo della PR inizia con `KCK-<n>: `).
+Segui SOLO i passi e le verifiche del ticket. Ordine: piano (nessun file modificato) -> piano approvato ->
+implementazione -> verifiche del ticket (se ci sono test frame: un test per ogni TF) -> controlli in locale ->
+revisione -> PR verso `develop` con il template. La CI e l'approvazione di un PM valgono per tutti.
+Tester e revisore (`.claude/agents/tester.md`, `revisore.md`): in Claude Code sono agenti; con altre IA
+apri una sessione nuova e dai come prima istruzione il contenuto del file.
+
 ## Documenti di riferimento (leggili solo quando servono)
 - `docs/rad/requisiti.md` requisiti, user story, tabella degli oggetti; `docs/rad/uc/` casi d'uso;
   `docs/rad/mockup/` mock-up UI_* e percorsi di navigazione
-- `docs/modelli/` class diagram, sequence, statechart (PlantUML); `docs/modelli/DECISIONI_RAD.md`
+- `docs/modelli/class_diagram_sdd.md` class diagram dell'SDD in testo e mappatura sul DB; `docs/modelli/` class diagram, sequence, statechart (PlantUML); `docs/modelli/DECISIONI_RAD.md`
   decisioni sui punti non coperti dal RAD
 - `docs/sdd/design_goals.md` design goal e trade-off; `docs/sdd/*.puml` component e deployment
 - `docs/test/` category partition e test frame
+- `docs/fonti/` RAD v2.9 e SDD v1.0 originali (PDF): solo se il ticket li cita, altrimenti usa i file in `docs/`.
+  Diagrammi e mock-up nei PDF sono immagini: se non riesci a leggerli, chiedi di allegare le pagine
 - `CONTRIBUTING.md` flusso Git/Jira
