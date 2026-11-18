@@ -14,13 +14,10 @@
 #
 # Prerequisiti (una volta sola, li fanno i PM):
 #   - Settings -> Pages -> Source = "GitHub Actions";
-#   - Settings -> Secrets and variables -> Actions -> scheda "Variables":
-#     SUPABASE_URL e SUPABASE_ANON_KEY (stessi valori del config.json locale).
-#     Sono VARIABLES e non secrets perche' la chiave anon e' pubblica (i dati
-#     sono protetti dalle RLS) e finisce comunque dentro l'app compilata.
-#     La chiave service_role NON va mai messa qui.
-#     Se mancano, la build riesce lo stesso ma l'app mostra "Configurazione
-#     mancante" (e il run mostra un avviso).
+#   - Settings -> Secrets and variables -> Actions -> Secrets: SUPABASE_URL e
+#     SUPABASE_ANON_KEY (stessi valori del config.json locale). La chiave
+#     service_role NON va mai messa qui. Se mancano, la build riesce lo stesso
+#     ma l'app mostra "Configurazione mancante" (e il run mostra un avviso).
 # =============================================================================
 name: CD
 
@@ -42,9 +39,12 @@ jobs:
     name: Build web per GitHub Pages
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # URL e chiave publishable/anon di Supabase arrivano dai secret del
+    # repository. Passati via env e non interpolati nel comando, come in ci.yml.
+    # La CI (ci.yml) invece resta senza chiavi: i test non le usano.
     env:
-      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v7
 
@@ -54,7 +54,7 @@ jobs:
       - name: Controlla la configurazione di Supabase
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::Variables SUPABASE_URL / SUPABASE_ANON_KEY mancanti: l'app pubblicata mostrera' 'Configurazione mancante'. Vedi l'intestazione di cd.yml."
+            echo "::warning::Secret SUPABASE_URL / SUPABASE_ANON_KEY mancanti: l'app pubblicata mostrera' 'Configurazione mancante' (vedi main.dart e l'intestazione di cd.yml)."
           fi
 
       # Su GitHub Pages l'app non sta nella radice del dominio ma in
@@ -62,7 +62,7 @@ jobs:
       # --dart-define passa a Flutter la configurazione di Supabase (la stessa
       # che in locale arriva da --dart-define-from-file=config.json).
       - name: Compila l'app web
-        run: >
+        run: >-
           flutter build web --release
           --base-href "/${{ github.event.repository.name }}/"
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
@@ -97,9 +97,10 @@ jobs:
     # passo); il resto del job non scrive nulla nel repository.
     permissions:
       contents: write
+    # Stessi secret della build web: l'APK si collega al progetto Supabase.
     env:
-      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -116,7 +117,7 @@ jobs:
       - name: Controlla la configurazione di Supabase
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::warning::Variables SUPABASE_URL / SUPABASE_ANON_KEY mancanti: l'APK mostrera' 'Configurazione mancante'. Vedi l'intestazione di cd.yml."
+            echo "::warning::Secret SUPABASE_URL / SUPABASE_ANON_KEY mancanti: l'APK mostrera' 'Configurazione mancante' (vedi l'intestazione di cd.yml)."
           fi
 
       # APK firmato con la chiave di debug: va bene per installarlo sui
@@ -124,7 +125,7 @@ jobs:
       # --build-number: il "versionCode" di Android cresce a ogni run, cosi'
       # un APK nuovo si installa sopra quello vecchio senza disinstallare.
       - name: Compila l'APK
-        run: >
+        run: >-
           flutter build apk --release
           --build-number="${{ github.run_number }}"
           --dart-define=SUPABASE_URL="$SUPABASE_URL"

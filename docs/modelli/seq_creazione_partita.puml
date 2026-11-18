@@ -1,0 +1,41 @@
+' Sequence diagram SD_UC_PAR_1 (Creazione Partita).
+' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 49 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Serve a fissare chi chiama chi e in quale ordine nella creazione di una partita,
+' da cui si ricavano le firme dei metodi di GestionePartitaControl e PrenotazioneControl.
+' Nomi, messaggi e ordine sono quelli del RAD: non correggere qui, segnalare nel ticket.
+@startuml SD_UC_PAR_1
+title SD_UC_PAR_1 (Creazione Partita)
+autonumber
+skinparam sequenceMessageAlign left
+
+actor "Giocatore\n(Organizzatore)" as Giocatore
+boundary FormCreazionePartita
+control GestionePartitaControl
+control PrenotazioneControl
+entity Campo
+
+' Raccolta dei parametri e calcolo del riepilogo (quota stimata)
+Giocatore -> FormCreazionePartita : compilaForm()
+FormCreazionePartita -> GestionePartitaControl : richiediRiepilogo()
+GestionePartitaControl -> PrenotazioneControl : verificaSlot()
+PrenotazioneControl -> Campo : getDisponibilita()
+Campo --> PrenotazioneControl : orari
+PrenotazioneControl --> GestionePartitaControl : slotDisponibile
+GestionePartitaControl -> Campo : getTariffa()
+Campo --> GestionePartitaControl : tariffaBase
+GestionePartitaControl -> GestionePartitaControl : calcolaQuota()
+GestionePartitaControl --> FormCreazionePartita : mostraRiepilogo()
+FormCreazionePartita --> Giocatore : mostra riepilogo
+
+' Conferma: creazione della Partita (stato Aperta) e prenotazione dello slot
+Giocatore -> FormCreazionePartita : confermaCreazione()
+FormCreazionePartita -> GestionePartitaControl : finalizzaCreazione()
+create entity Partita
+GestionePartitaControl -> Partita : create(stato=Aperta)
+GestionePartitaControl -> PrenotazioneControl : prenotaSlot()
+create entity Prenotazione
+PrenotazioneControl -> Prenotazione : create()
+PrenotazioneControl --> GestionePartitaControl : slotPrenotato
+GestionePartitaControl --> FormCreazionePartita : creazioneCompletata()
+FormCreazionePartita --> Giocatore : messaggio di successo
+@enduml

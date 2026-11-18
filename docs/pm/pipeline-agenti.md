@@ -86,7 +86,7 @@ servono solo per segnalare bug (modulo **Bug**).
 
 **Rilascio**
 - [x] Settings -> Pages -> Source = **GitHub Actions** (sito su GitHub Pages)
-- [ ] Settings -> Secrets and variables -> Actions -> **Variables**: `SUPABASE_URL` e `SUPABASE_ANON_KEY` (stessi valori del `config.json`; la chiave anon e' pubblica, **mai** la `service_role`). Senza, la CD pubblica un'app che mostra "Configurazione mancante"
+- [ ] Settings -> Secrets and variables -> Actions -> **Secrets**: `SUPABASE_URL` e `SUPABASE_ANON_KEY` (stessi valori del `config.json`; **mai** la `service_role`). Senza, la CD pubblica un'app che mostra "Configurazione mancante"
 - [ ] (Facoltativo) aggiungere ai check obbligatori "Build Android (debug)" e "Supabase e Edge Functions" dopo che hanno girato qualche volta senza problemi
 
 ## 4. Problemi tipici

@@ -130,8 +130,8 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
   la PR `develop → main`; un PM la approva e fa il merge (merge commit).
 - **CD** (`cd.yml`): a ogni merge su `main` pubblica l'app web su GitHub Pages,
   produce un APK Android (tra gli Artifacts del run) e lo allega a una GitHub
-  Release. Usa le *Variables* di repository `SUPABASE_URL` e `SUPABASE_ANON_KEY`
-  (Settings → Secrets and variables → Actions → Variables): senza, l'app
+  Release. Usa i *Secrets* di repository `SUPABASE_URL` e `SUPABASE_ANON_KEY`
+  (Settings → Secrets and variables → Actions → Secrets): senza, l'app
   pubblicata mostra "Configurazione mancante".
 - **Dependabot** (`dependabot.yml`): ogni lunedi' propone gli aggiornamenti
   delle action e delle dipendenze Dart; come ogni PR servono CI verde e
