@@ -123,11 +123,21 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
 
 - **CI** (`ci.yml`): su ogni PR verso `develop`/`main` controlla il nome del
   branch (`<tipo>/KCK-<n>-...`), formattazione, analisi statica, test con
-  coverage e build web. Una PR rossa non si mergia.
+  coverage e build web. Una PR rossa non si mergia. Sui push in `develop`/`main`
+  compila anche l'app Android (debug) e, se si tocca `supabase/`, esegue i test
+  del database e delle Edge Functions.
 - **Release settimanale** (`release.yml`): **ogni mercoledi'** apre in automatico
   la PR `develop → main`; un PM la approva e fa il merge (merge commit).
-- **CD** (`cd.yml`): a ogni merge su `main` pubblica l'app web su GitHub Pages
-  e produce un APK Android scaricabile dalla pagina del run.
+- **CD** (`cd.yml`): a ogni merge su `main` pubblica l'app web su GitHub Pages,
+  produce un APK Android (tra gli Artifacts del run) e lo allega a una GitHub
+  Release. Usa le *Variables* di repository `SUPABASE_URL` e `SUPABASE_ANON_KEY`
+  (Settings → Secrets and variables → Actions → Variables): senza, l'app
+  pubblicata mostra "Configurazione mancante".
+- **Dependabot** (`dependabot.yml`): ogni lunedi' propone gli aggiornamenti
+  delle action e delle dipendenze Dart; come ogni PR servono CI verde e
+  approvazione di un PM.
+- **Versione di Flutter**: e' scritta nell'azione `.github/actions/setup-flutter`
+  (unico punto da cambiare per aggiornarla, insieme a questo README e ad AGENTS.md).
 - **Jira ↔ GitHub**: con l'app GitHub for Atlassian, branch, commit e PR che
   contengono la chiave del ticket (es. `KCK-60`) compaiono nel ticket Jira.
   - *Come Verificare*: dopo aver fatto 'git push', apri il ticket su Jira e controlla il pannello **Sviluppo** sulla destra. 
