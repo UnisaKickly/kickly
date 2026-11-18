@@ -1,0 +1,9 @@
+# partite / data
+
+Sottosistema: **Gestione Partite e RSVP** (SDD v1.0, §3.2).
+
+Strato Data (Repository, SDD §3.2.2): contiene un Repository per ogni Entity del
+sottosistema.
+I Repository si appoggiano al sottosistema Persistenza.
+
+Gli SDK esterni (Supabase, FCM, Stripe) si usano solo in data/ e in lib/core/ (DG9).
