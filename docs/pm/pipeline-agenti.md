@@ -6,9 +6,15 @@ persone in punti precisi. Le regole per gli agenti stanno in
 [`AGENTS.md`](../../AGENTS.md); il flusso Git/Jira in
 [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
-**Niente agenti automatici su GitHub.** Il progetto non usa agenti che girano
-dentro GitHub Actions (richiederebbero una chiave API a pagamento). Ognuno usa
-l'assistente IA che preferisce, con il proprio account:
+**Agenti su GitHub: solo la review automatica.** Gli agenti che scrivono codice non
+girano dentro GitHub Actions (richiederebbero una chiave API a pagamento). L'unico
+agente automatico e' il revisore Gemini (`.github/workflows/gemini-review.yml`,
+KCK-265): usa una chiave GRATUITA di Google AI Studio nel secret `GEMINI_API_KEY`,
+senza fatturazione collegata, legge la diff e pubblica un commento con le differenze
+rispetto ai modelli. Non approva, non modifica file e non apre issue; parte sulle PR
+del team (non da fork, non in bozza) e si rilancia aggiungendo l'etichetta
+`gemini-review`. Se la quota gratuita finisce, semplicemente non commenta.
+Per scrivere il codice ognuno usa l'assistente IA che preferisce, con il proprio account:
 
 | Se usi | Consigliato | Note |
 |---|---|---|
