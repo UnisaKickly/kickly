@@ -25,8 +25,12 @@
 #   - chiave gratuita di Google AI Studio nel secret GEMINI_API_KEY, senza
 #     account di fatturazione collegato: se la quota gratuita finisce la
 #     richiesta viene rifiutata (errore 429), non addebitata;
-#   - modello Flash, dimensione massima della diff, 5 giri massimi, timeout di
-#     10 minuti, una sola esecuzione per PR alla volta (concurrency);
+#   - circa UNA richiesta a Gemini per review (nessuno strumento, quindi nessun
+#     giro in piu'); diff massima di 25000 caratteri; 2 giri massimi; timeout di
+#     10 minuti; una sola esecuzione per PR alla volta (concurrency);
+#   - niente review per PR di sola documentazione, per la release settimanale
+#     (develop) e per Dependabot;
+#   - tetto giornaliero di review (variabile GEMINI_DAILY_LIMIT, predefinito 30);
 #   - `continue-on-error`: se Gemini non risponde la PR non diventa rossa.
 #
 # Per cambiare modello senza una PR: Settings -> Secrets and variables ->
@@ -38,6 +42,11 @@ on:
   pull_request:
     branches: [develop, main]
     types: [opened, ready_for_review, labeled]
+    # Le PR che toccano SOLO documenti non partono: non c'e' codice da
+    # confrontare con i modelli e ogni review consuma quota gratuita.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 # Una sola esecuzione per PR: se parte una seconda, annulla la prima.
 concurrency:
@@ -48,6 +57,8 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
+  # Serve a contare le review gia' fatte oggi (tetto giornaliero).
+  actions: read
 
 jobs:
   review:
@@ -56,6 +67,8 @@ jobs:
     # team e, per l'evento "labeled", solo con l'etichetta giusta.
     if: >-
       github.event.pull_request.draft == false &&
+      github.event.pull_request.head.ref != 'develop' &&
+      !startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association) &&
       (github.event.action != 'labeled' || github.event.label.name == 'gemini-review')
@@ -72,10 +85,37 @@ jobs:
           # Il token non resta nel repository clonato.
           persist-credentials: false
 
+      # Tetto giornaliero (freno ai consumi): conta le review gia' eseguite oggi
+      # (UTC) da questo workflow e, se si arriva al limite, salta le successive.
+      # Il limite e' modificabile senza PR dalla variabile GEMINI_DAILY_LIMIT
+      # (Settings -> Secrets and variables -> Actions -> Variables); predefinito 30.
+      - name: Controlla il tetto giornaliero
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIMIT: ${{ vars.GEMINI_DAILY_LIMIT || '30' }}
+          WORKFLOW_FILE: gemini-review.yml
+        run: |
+          set -euo pipefail
+          oggi=$(date -u +%F)
+          # Esecuzioni di oggi che hanno davvero lavorato (esito success/failure);
+          # quelle saltate da una condizione ("skipped") non consumano richieste.
+          fatte=$(gh run list --workflow "$WORKFLOW_FILE" --created ">=$oggi" \
+            --limit 200 --json conclusion \
+            --jq '[.[] | select(.conclusion=="success" or .conclusion=="failure")] | length')
+          echo "Review gia' fatte oggi: $fatte (limite $LIMIT)"
+          if [ "$fatte" -ge "$LIMIT" ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tetto giornaliero di review raggiunto ($LIMIT): questa PR non viene rivista oggi. Riaggiungi l'etichetta gemini-review domani."
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # Prepara il testo da dare al modello: istruzioni del revisore, regole del
       # progetto e diff della PR (tagliata se troppo lunga).
       - name: Prepara il prompt
         id: ctx
+        if: steps.guard.outputs.ok == 'true'
         env:
           BASE: ${{ github.base_ref }}
           # Titolo e descrizione li sceglie chi apre la PR: passati via env e
@@ -86,13 +126,13 @@ jobs:
           # Diff senza file binari, PDF e file generati: costano molte richieste
           # e non sono revisionabili.
           git diff "origin/$BASE...HEAD" -- . \
-            ':!*.pdf' ':!*.png' ':!*.jpg' ':!*.xlsx' ':!*.docx' ':!pubspec.lock' \
+            ':!*.pdf' ':!*.png' ':!*.jpg' ':!*.xlsx' ':!*.docx' ':!pubspec.lock' ':!*.lock' ':!supabase/config.toml' \
             ':!docs/Documentazione' ':!docs/fonti' > pr.diff || true
           total=$(wc -c < pr.diff)
-          head -c 40000 pr.diff > pr_cut.diff
+          head -c 25000 pr.diff > pr_cut.diff
           note=""
-          if [ "$total" -gt 40000 ]; then
-            note="ATTENZIONE: la diff e' di $total caratteri e qui e' tagliata ai primi 40000: dillo nella risposta."
+          if [ "$total" -gt 25000 ]; then
+            note="ATTENZIONE: la diff e' di $total caratteri e qui e' tagliata ai primi 25000: dillo nella risposta."
           fi
           # Delimitatore casuale: una diff costruita ad arte non puo' chiuderlo prima
           # del tempo e inserire altri output.
@@ -127,6 +167,7 @@ jobs:
 
       - name: Review con Gemini
         id: gemini
+        if: steps.guard.outputs.ok == 'true'
         # Versione fissata (v0.1.22) per non ricevere modifiche a sorpresa.
         uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489
         with:
@@ -138,14 +179,14 @@ jobs:
           prompt: ${{ steps.ctx.outputs.prompt }}
           settings: |-
             {
-              "model": { "maxSessionTurns": 5 },
+              "model": { "maxSessionTurns": 2 },
               "tools": { "core": [] }
             }
 
       # Pubblica la risposta come commento della PR. Il testo passa da una
       # variabile d'ambiente e da un file: mai interpolato nello script.
       - name: Pubblica il commento
-        if: steps.gemini.outputs.summary != ''
+        if: steps.guard.outputs.ok == 'true' && steps.gemini.outputs.summary != ''
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
