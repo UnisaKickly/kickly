@@ -1,11 +1,15 @@
 @startuml
+' Component diagram di Kickly (SDD v1.0, §3.2.1 e §3.2.2).
+' Ogni sottosistema e' diviso in GUI (Presentation), Control (Domain) e Repository (Data).
+' I nomi delle classi sono ESATTAMENTE quelli dell'SDD (AGENTS.md): chi scrive codice li riusa.
+' Tutti i Repository si appoggiano alla Persistenza (SupabaseClient).
+title Kickly - Component diagram (SDD §3.2.1 e §3.2.2)
+
 package "Gestione Utenza" {
   component "Presentation\nGestioneUtenzaGUI" as UtenzaGUI
   component "Domain\nGestioneUtenzaControl" as UtenzaControl
   component "Data\nAccountRepository" as UtenzaRepository
-  interface "IGestioneUtenza" as IUtenza
-  UtenzaGUI --() IUtenza
-  IUtenza -- UtenzaControl
+  UtenzaGUI --> UtenzaControl
   UtenzaControl --> UtenzaRepository
 }
 
@@ -13,9 +17,7 @@ package "Gestione Leghe e Inviti" {
   component "Presentation\nGestioneLegheGUI" as LegheGUI
   component "Domain\nGestioneLegheControl" as LegheControl
   component "Data\nLegaRepository" as LegheRepository
-  interface "IGestioneLeghe" as ILeghe
-  LegheGUI --() ILeghe
-  ILeghe -- LegheControl
+  LegheGUI --> LegheControl
   LegheControl --> LegheRepository
 }
 
@@ -23,9 +25,7 @@ package "Gestione Rete Sociale e Sicurezza" {
   component "Presentation\nGestioneReteSocialeSicurezzaGUI" as ReteSicurezzaGUI
   component "Domain\nGestioneReteSocialeSicurezzaControl" as ReteSicurezzaControl
   component "Data\nDispositivoRepository" as ReteSicurezzaRepository
-  interface "IGestioneReteSocialeSicurezza" as IReteSicurezza
-  ReteSicurezzaGUI --() IReteSicurezza
-  IReteSicurezza -- ReteSicurezzaControl
+  ReteSicurezzaGUI --> ReteSicurezzaControl
   ReteSicurezzaControl --> ReteSicurezzaRepository
 }
 
@@ -33,49 +33,46 @@ package "Gestione Partite e RSVP" {
   component "Presentation\nGestionePartiteGUI" as PartiteGUI
   component "Domain\nGestionePartiteControl" as PartiteControl
   component "Data\nPartitaRepository\nPartecipazioneRepository\nPrenotazioneRepository" as PartiteRepository
-  interface "IGestionePartite" as IPartite
-  PartiteGUI --() IPartite
-  IPartite -- PartiteControl
+  PartiteGUI --> PartiteControl
   PartiteControl --> PartiteRepository
 }
 
-package "Gestione Strutture" {
+' Gestione Strutture e Pagamenti e' un solo sottosistema nell'SDD, ma nel diagramma
+' architetturale (§3.2.2) e' diviso in due parti in base all'attore:
+' GestioneStrutture (Gestore del Campo) e GestionePagamenti (Giocatore).
+package "Gestione Strutture e Pagamenti - parte Strutture" {
   component "Presentation\nGestioneStruttureGUI" as StruttureGUI
   component "Domain\nGestioneStruttureControl" as StruttureControl
   component "Data\nCampoRepository" as StruttureRepository
-  interface "IGestioneStrutture" as IStrutture
-  StruttureGUI --() IStrutture
-  IStrutture -- StruttureControl
+  StruttureGUI --> StruttureControl
   StruttureControl --> StruttureRepository
 }
 
-package "Gestione Voto MVP e Notifiche" {
-  component "Presentation\nGestioneVotoMVPNotificheGUI" as VotoNotificheGUI
-  component "Domain\nGestioneVotoMVPNotificheControl" as VotoNotificheControl
-  component "Data\nVotazioneRepository\nNotificaRepository" as VotoNotificheRepository
-  interface "IGestioneVotoMVPNotifiche" as IVotoNotifiche
-  VotoNotificheGUI --() IVotoNotifiche
-  IVotoNotifiche -- VotoNotificheControl
-  VotoNotificheControl --> VotoNotificheRepository
-}
-
-package "Gestione Pagamenti" {
+package "Gestione Strutture e Pagamenti - parte Pagamenti" {
   component "Presentation\nGestionePagamentiGUI" as PagamentiGUI
   component "Domain\nGestionePagamentiControl" as PagamentiControl
+  ' GatewayPagamenti e' l'unico punto di accesso a Stripe Connect (DG8, DG9).
   component "Data\nTransazioneRepository\nQuotaRepository\nGatewayPagamenti" as PagamentiRepository
-  interface "IGestionePagamenti" as IPagamenti
-  PagamentiGUI --() IPagamenti
-  IPagamenti -- PagamentiControl
+  PagamentiGUI --> PagamentiControl
   PagamentiControl --> PagamentiRepository
+}
+
+package "Gestione Voto MVP e Notifiche" {
+  component "Presentation\nGestioneVotoMVPGUI" as VotoNotificheGUI
+  component "Domain\nGestioneVotoMVPControl" as VotoNotificheControl
+  component "Data\nVotazioneMVPRepository\nNotificaRepository" as VotoNotificheRepository
+  VotoNotificheGUI --> VotoNotificheControl
+  VotoNotificheControl --> VotoNotificheRepository
 }
 
 package "Persistenza" {
   component "Persistenza (SupabaseClient)" as PersistenzaClient
 }
 
-' Dipendenze tra sottosistemi dall'SDD §3.2.1.
+' Dipendenze tra sottosistemi dall'SDD §3.2.1, disegnate sui Control.
+' Sono le uniche chiamate ammesse tra sottosistemi diversi.
 UtenzaControl ..> ReteSicurezzaControl
-UtenzaControl ..> StruttureControl : «use»\nonboarding Gestore
+UtenzaControl ..> StruttureControl : <<use>>\nonboarding Gestore
 LegheControl ..> PartiteControl
 LegheControl ..> VotoNotificheControl
 ReteSicurezzaControl ..> PartiteControl
@@ -84,11 +81,7 @@ PartiteControl ..> PagamentiControl
 StruttureControl ..> VotoNotificheControl
 PagamentiControl ..> VotoNotificheControl
 
-note bottom
-Le frecce di §3.2.1 sono collegate ai Control;
-esse rappresentano esplicitamente le dipendenze tra sottosistemi.
-end note
-' I repository accedono esclusivamente attraverso la Persistenza.
+' I repository accedono ai dati esclusivamente attraverso la Persistenza.
 UtenzaRepository ..> PersistenzaClient
 LegheRepository ..> PersistenzaClient
 ReteSicurezzaRepository ..> PersistenzaClient
