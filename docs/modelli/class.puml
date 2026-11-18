@@ -1,0 +1,133 @@
+@startuml
+
+' Dati comuni e preferenze dell'account, condivisi dalle specializzazioni.
+class Account {
+  - ruoloAccount: String
+  - nome: String
+  - cognome: String
+  - email: String
+  - password: String
+  - eta: int
+  - statoAccount: String
+  - statoOnboarding: String
+  - preferenzeNotifiche: String
+}
+
+' Specializza Account per rappresentare chi organizza o partecipa alle partite.
+class Giocatore {
+  - ruoloPreferitoInCampo: String
+  - piedeDominante: String
+}
+
+' Specializza Account per rappresentare chi gestisce una struttura sportiva.
+class GestoreCampo {
+  - idAccountPagamenti: String
+}
+
+' Rappresenta le comunicazioni associate a un account.
+class Notifica {
+  - tipo: String
+  - messaggio: String
+  - statoLettura: boolean
+  - timestamp: Date
+}
+
+' Registra i dati di accesso del dispositivo associato a un account.
+class DispositivoRegistrato {
+  - identificativo: String
+  - primoAccesso: Date
+  - ultimoAccesso: Date
+}
+
+' Descrive una struttura sportiva gestita e i suoi orari disponibili.
+class Campo {
+  - nome: String
+  - ubicazione: String
+  - tariffaOraria: float
+  - orariDisponibilita: String
+}
+
+' Raccoglie i dati di una lega e del relativo invito.
+class Lega {
+  - nome: String
+  - tipologiaMatch: String
+  - privacy: String
+  - codiceInvito: String
+  - scadenzaCodiceInvito: Date
+}
+
+' Rappresenta una partita organizzata, pubblica o appartenente a una lega.
+class Partita {
+  - dataOra: Date
+  - tipologia: String
+  - privacy: String
+  - numPartecipantiRichiesti: int
+  - stato: String
+  - linkCondivisione: String
+}
+
+' Descrive il blocco e il costo concordato per lo slot del campo.
+class Prenotazione {
+  - intervallo: String
+  - statoBlocco: String
+  - scadenzaBlocco: Date
+  - costoConcordato: float
+  - quotaIndividuale: float
+  - commissione: float
+  - nettoGestore: float
+}
+
+' Registra la risposta e le statistiche del giocatore per una partita.
+class Partecipazione {
+  - rispostaStato: String
+  - dataRisposta: Date
+  - golPartita: int
+  - assistPartita: int
+}
+
+' Raccoglie le preferenze MVP espresse e l'eventuale vincitore della partita.
+class VotazioneMVP {
+  - statoVotazione: String
+  - scadenza: Date
+  - preferenzeVotanteVotato: Map<Giocatore, Giocatore>
+  - vincitore: Giocatore [0..1]
+}
+
+' Registra un pagamento o un rimborso e il relativo esito.
+class Transazione {
+  - tipo: String
+  - importo: float
+  - stato: String
+  - dataEsito: Date
+  - riferimentoEsterno: String
+}
+
+' Rappresenta la quota individuale dovuta per una partecipazione.
+class Quota {
+  - importo: float
+  - statoVersamento: String
+  - termineVersamento: Date
+}
+
+Account <|-- Giocatore
+Account <|-- GestoreCampo
+
+Account "1" -- "0..*" Notifica
+Account "1" -- "0..*" DispositivoRegistrato
+GestoreCampo "1" -- "0..*" Campo
+Campo "1" -- "0..*" Prenotazione
+Prenotazione "0..1" -- "1" Partita
+Prenotazione "0..1" -- "0..*" Transazione
+GestoreCampo "0..1" -- "0..*" Transazione
+Lega "0..*" -- "0..*" Giocatore : membri
+Lega "0..*" -- "1..*" Giocatore : amministratori
+Lega "0..1" -- "0..*" Partita
+Giocatore "1" -- "0..*" Partita : organizzatore
+Giocatore "1" -- "0..*" Partecipazione
+Partita "1" -- "0..*" Partecipazione
+Partita "1" -- "0..1" VotazioneMVP
+Partecipazione "1" -- "0..1" Quota
+Quota "0..1" -- "0..*" Transazione
+Transazione "0..1" -- "0..1" Transazione : transazioneOriginaria
+
+@enduml
