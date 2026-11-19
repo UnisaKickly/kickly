@@ -19,9 +19,10 @@ stessa funzione**: le categorie di funzioni diverse non si combinano. Una scelta
 Fonti degli esiti attesi: i casi d'uso UC_MVP_1 e UC_SS_1, RAD v2.9 §3.2
 (RF_POS_1, RF_POS_2, RF_NOT_1, RF_NOT_2, RF_SS_1, RF_SS_2) e §3.3 (RNF_L_1), la
 tabella degli oggetti (§3.4.4.1.4 e §3.4.4.1.6), SDD v1.4 DG4 e
-`docs/modelli/DECISIONI_RAD.md` (D1, D2, D9, D12). Dove nessuna fonte dice
-l'esito, il frame e' marcato **DA CONFERMARE** e rimanda a una domanda della
-sezione 4: l'esito non e' stato ipotizzato.
+`docs/modelli/DECISIONI_RAD.md` (D1, D2, D9, D10, D12, D13, D14, D15). Dove il RAD
+non dice l'esito, l'esito viene dalle decisioni dei PM (risposte alle domande
+della sezione 4): nessun esito e' stato ipotizzato. Resta da completare solo
+TF_SS_11, che D12 affida al piano di KCK-204 / KCK-212.
 
 Fuori dai frame: RNF_PRE_2 (DG8, voto registrato entro 10 secondi), RNF_A_1
 (DG5, statistiche aggiornate entro 1 minuto e senza perdite) e RNF_PRE_1 (DG11,
@@ -145,20 +146,20 @@ ticket che implementa il Control corrispondente.
 |---|---|---|---|---|
 | TF_MVP_01 | Conclusa, ha partecipato, nessun voto, un altro partecipante, accesso e conferma raggiungibili | Partita "Conclusa" con `VotazioneMVP` aperta (D1); Giocatore autenticato tra i partecipanti | Il sistema mostra l'elenco dei partecipanti; dopo la conferma salva la preferenza nella `VotazioneMVP`, aggiorna i dati statistici del giocatore votato e mostra un messaggio di successo | UC_MVP_1 passi 1-6, RF_POS_1 |
 | TF_MVP_02 | voto gia' espresso | Il Giocatore ha gia' votato nella stessa votazione | Il sistema blocca l'operazione e mostra un messaggio di avviso; il voto precedente resta invariato (un solo voto per giocatore nella stessa votazione) | UC_MVP_1 flusso alternativo 3.1, tabella degli oggetti (`VotazioneMVP`) |
-| TF_MVP_03 | non ha partecipato | Giocatore autenticato che non ha partecipato alla partita "Conclusa" | **DA CONFERMARE** (domanda 2): il voto non deve essere registrato, ma il RAD non dice cosa vede il Giocatore | UC_MVP_1 passo 2 (elenco dei partecipanti) |
-| TF_MVP_04 | partita non Conclusa | Partita in stato diverso da "Conclusa" | **DA CONFERMARE** (domanda 1): nessun voto registrabile (entry condition; D1: la votazione si apre alla conclusione), ma il RAD non dice cosa vede il Giocatore | Entry condition UC_MVP_1, D1 |
+| TF_MVP_03 | non ha partecipato | Giocatore autenticato che non ha partecipato alla partita "Conclusa" | Il comando di voto non e' visibile; una richiesta diretta viene rifiutata con "Solo i partecipanti possono votare" e nessun voto e' registrato | UC_MVP_1 passo 2 (elenco dei partecipanti), D13 |
+| TF_MVP_04 | partita non Conclusa | Partita in stato diverso da "Conclusa" | Il comando "Vota MVP" non e' disponibile (la votazione si apre solo alla conclusione); una richiesta diretta viene rifiutata con un messaggio di errore e nessun voto e' registrato | Entry condition UC_MVP_1, D1, D13 |
 | TF_MVP_05 | connessione non raggiungibile all'accesso alla sezione | Connessione assente quando il Giocatore apre il dettaglio della partita | Il sistema notifica l'errore invitando a riprovare piu' tardi; nessun voto registrato | UC_MVP_1 flusso di errore 1.1 |
 | TF_MVP_06 | connessione non raggiungibile alla conferma | Connessione assente al momento della conferma del voto | Il sistema notifica l'errore invitando a riprovare piu' tardi; il voto non e' registrato e il Giocatore e' avvisato | UC_MVP_1 flusso di errore 4.1, exit condition on failure |
-| TF_MVP_07 | il Giocatore vota se stesso | Il Giocatore seleziona se stesso nell'elenco dei partecipanti | **DA CONFERMARE** (domanda 3): il RAD non dice se l'autovoto e' ammesso | UC_MVP_1 passo 3 |
+| TF_MVP_07 | il Giocatore vota se stesso | Il Giocatore prova a votare se stesso | L'autovoto non e' ammesso: il votante non compare nell'elenco dei giocatori votabili; una richiesta di voto per se stesso viene rifiutata con un messaggio di errore e il voto non e' registrato | UC_MVP_1 passo 2, D14 |
 
 ### 3.2 F2 Classifica (RF_POS_2)
 
 | Id | Scelte combinate | Preparazione | Esito atteso | Fonte |
 |---|---|---|---|---|
 | TF_MVP_08 | almeno un giocatore con titoli, gol e assist inseriti, titoli diversi | Piu' partite concluse con vincitori MVP diversi e gol/assist inseriti | La classifica mostra i giocatori ordinati per titoli MVP vinti, distinguendo i voti ricevuti dai titoli, con gol e assist | RF_POS_2, tabella degli oggetti (`ClassificaControl`) |
-| TF_MVP_09 | classifica vuota | Nessuna votazione conclusa: nessun giocatore ha titoli MVP | **DA CONFERMARE** (domanda 4): il RAD non dice cosa mostra la classifica vuota | RF_POS_2 |
+| TF_MVP_09 | classifica vuota | Nessuna votazione conclusa: nessun giocatore ha titoli MVP | La classifica mostra il messaggio "Nessuna classifica disponibile" | RF_POS_2, D15 |
 | TF_MVP_10 | gol e assist non inseriti | Partite concluse con vincitori MVP ma senza gol e assist inseriti dall'Organizzatore | La classifica mostra i titoli MVP; gol e assist compaiono a 0 | RF_POS_2, D2 |
-| TF_MVP_11 | due giocatori a pari merito | Due giocatori con lo stesso numero di titoli MVP | **DA CONFERMARE** (domanda 5): il RAD non indica il criterio di ordinamento a parita' di titoli | RF_POS_2 |
+| TF_MVP_11 | due giocatori a pari merito | Due giocatori con lo stesso numero di titoli MVP | A parita' di titoli MVP l'ordine e' dato dai voti ricevuti, poi dai gol, poi dagli assist, poi dall'ordine alfabetico del nome | RF_POS_2, D15 |
 
 ### 3.3 F3 Invio notifica (RF_NOT_1, RF_NOT_2)
 
@@ -190,8 +191,8 @@ ticket che implementa il Control corrispondente.
 | TF_SS_02 | pubblica, iscritto, connessione raggiungibile, app di terze parti | Come TF_SS_01 | Il sistema genera il link univoco e apre il menu nativo; scelta un'app di terze parti, chiude il menu e apre l'applicazione corrispondente | UC_SS_1 passi 1-5, RF_SS_1 |
 | TF_SS_03 | chiude il menu senza scegliere | Link generato e menu nativo aperto | Il sistema annulla l'operazione e il Giocatore resta sulla schermata di dettaglio della partita | UC_SS_1 flusso alternativo A1, exit condition on failure |
 | TF_SS_04 | connessione non raggiungibile | Connessione assente quando il sistema deve generare il link | Il link non viene generato; il sistema notifica l'errore invitando a riprovare e si riprende dal passo 1 | UC_SS_1 flusso di errore E1 |
-| TF_SS_05 | partita non pubblica | Partita privata o appartenente a una lega | **DA CONFERMARE** (domanda 6): fuori dalla entry condition e da RF_SS_1, ma il RAD non dice cosa vede il Giocatore | Entry condition UC_SS_1, RF_SS_1 |
-| TF_SS_06 | Giocatore non iscritto | Partita pubblica a cui il Giocatore non e' iscritto | **DA CONFERMARE** (domanda 7): fuori dalla entry condition, ma il RAD non dice cosa vede il Giocatore | Entry condition UC_SS_1 |
+| TF_SS_05 | partita non pubblica | Partita privata o appartenente a una lega | Il comando "Condividi" non e' disponibile; una richiesta diretta viene rifiutata con un messaggio di errore e nessun link e' generato | Entry condition UC_SS_1, RF_SS_1, D13 |
+| TF_SS_06 | Giocatore non iscritto | Partita pubblica a cui il Giocatore non e' iscritto | Il comando "Condividi" non e' disponibile; una richiesta diretta viene rifiutata con un messaggio di errore e nessun link e' generato | Entry condition UC_SS_1, D13 |
 
 ### 3.7 F7 Accesso da dispositivo (RF_SS_2)
 
@@ -216,16 +217,16 @@ duplicato (TF_MVP_02), votante non partecipante (TF_MVP_03), partita non
 conclusa (TF_MVP_04), preferenza disattivata (TF_NOT_02), nuovo dispositivo
 (TF_SS_08), cancellazione con transazioni da dissociare (TF_SS_10).
 
-## 4. Domande aperte per i PM
+## 4. Domande per i PM e risposte
 
-Finche' non ci sono risposte, i frame marcati **DA CONFERMARE** non hanno un
-esito completo e non vanno implementati come test.
+Risposte dei PM (Renato Mancino, 19/11/2026), registrate in
+`docs/modelli/DECISIONI_RAD.md`.
 
-1. TF_MVP_04: cosa vede il Giocatore che prova a votare in una partita non "Conclusa" (comando di voto non disponibile? messaggio?).
-2. TF_MVP_03: cosa vede chi non ha partecipato alla partita e prova a votare.
-3. TF_MVP_07: il Giocatore puo' votare se stesso? Se no, con quale esito.
-4. TF_MVP_09: cosa mostra la classifica quando nessun giocatore ha titoli MVP.
-5. TF_MVP_11: criterio di ordinamento a parita' di titoli MVP (voti ricevuti, gol, assist, ordine alfabetico?).
-6. TF_SS_05: cosa vede il Giocatore su una partita non pubblica (comando "Condividi" non disponibile?).
-7. TF_SS_06: cosa vede il Giocatore su una partita pubblica a cui non e' iscritto.
-8. TF_SS_11: come si risolve la lega quando si cancella il suo unico amministratore. Per D12 lo decide il piano approvato di `CancellazioneAccountControl` (KCK-204 / KCK-212): il frame va completato in quel ticket.
+1. TF_MVP_04, partita non "Conclusa". **Risposta:** comando "Vota MVP" non disponibile; richiesta diretta rifiutata (D1, D13).
+2. TF_MVP_03, votante non partecipante. **Risposta:** comando non visibile; richiesta diretta rifiutata con "Solo i partecipanti possono votare" (D13).
+3. TF_MVP_07, autovoto. **Risposta:** non ammesso, il votante non e' tra i votabili (D14).
+4. TF_MVP_09, classifica vuota. **Risposta:** "Nessuna classifica disponibile" (D15).
+5. TF_MVP_11, pari merito. **Risposta:** titoli MVP, poi voti ricevuti, gol, assist, ordine alfabetico (D15).
+6. TF_SS_05, partita non pubblica. **Risposta:** comando "Condividi" non disponibile; richiesta diretta rifiutata (D13).
+7. TF_SS_06, Giocatore non iscritto. **Risposta:** come la 6 (D13).
+8. TF_SS_11, lega dell'unico amministratore cancellato. **Risposta:** resta come da D12: lo decide il piano approvato di `CancellazioneAccountControl` (KCK-204 / KCK-212), dove il frame va completato. Il test di TF_SS_11 si scrive in quel ticket.
