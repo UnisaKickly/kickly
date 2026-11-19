@@ -68,7 +68,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 
 ---
 
-## D9 - Valori di statoAccount e statoOnboarding
+## D9 – Valori di statoAccount e statoOnboarding
 
 * **Problema:** Il class diagram dice che gli attributi di stato sono String con un CHECK, ma il RAD non elenca i valori di `Account.statoAccount` e `Account.statoOnboarding`.
 * **Decisione:** `statoOnboarding` ammette `in_corso` e `completato`: lo UC_ACC_1 prevede un onboarding che resta incompleto se l'utente abbandona (E3) e che al termine e' completato. `statoAccount` ammette `attivo` e `in_cancellazione`: RNF_L_1 chiede la cancellazione entro 30 giorni dalla richiesta, quindi serve uno stato intermedio. Alla creazione: `attivo` e `in_corso`. Nel DB sono due CHECK, in Dart due insiemi di costanti. Nessun altro valore senza chiedere ai PM.
@@ -76,7 +76,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 
 ---
 
-## D10 - Tipo di preferenzeNotifiche nel database
+## D10 – Tipo di preferenzeNotifiche nel database
 
 * **Problema:** Nel class diagram `Account.preferenzeNotifiche` e' String, ma la migration A lo aveva scritto come `jsonb`.
 * **Decisione:** Si resta sul class diagram (regola 1 e regola generale di `class_diagram_sdd.md` §3): la colonna e' `text NOT NULL DEFAULT '{}'` e contiene le preferenze serializzate in JSON da `AccountRepository`. Nessuna modifica ai modelli. Se serviranno interrogazioni sul contenuto, si usa il cast `::jsonb` nella query, senza cambiare il tipo.
@@ -84,7 +84,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 
 ---
 
-## D11 - Ruolo e specializzazione dell'Account
+## D11 – Ruolo e specializzazione dell'Account
 
 * **Problema:** `ruolo_account` e le tabelle `giocatore` e `gestore_campo` non sono legate nel database, mentre RF_ACC_1 e RF_ACC_2 dicono che la scelta del ruolo e' definitiva.
 * **Decisione:** Il vincolo non si mette in un trigger della migration. `ruolo_account` resta nullo fino all'onboarding e lo imposta una sola volta il Control di registrazione, che crea nello stesso passo la riga di `giocatore` o di `gestore_campo`. Che il ruolo non si possa piu' modificare si garantisce con le policy RLS, che nel ticket RLS vietano l'aggiornamento di `ruolo_account` quando e' gia' valorizzato.
@@ -92,7 +92,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 
 ---
 
-## D12 - Cancellazione dell'unico amministratore di una lega
+## D12 – Cancellazione dell'unico amministratore di una lega
 
 * **Problema:** Il class diagram prevede 1..* amministratori per lega, ma la cancellazione dell'account dell'unico amministratore (RNF_L_1) puo' lasciare la lega senza amministratori, e il RAD non dice cosa succede.
 * **Decisione:** La cancellazione dei dati personali non si blocca mai: la migration lascia quindi passare questo caso (come fa gia' il trigger di integrita', e la scelta e' da commentare in italiano nel codice SQL). Come si risolve la lega (promozione di un membro o cancellazione della lega) lo decide `CancellazioneAccountControl` nel suo ticket, con un piano approvato dai PM prima di scrivere codice. Nessuna nuova colonna e nessuna nuova schermata decise qui.
