@@ -10,6 +10,13 @@
 | **Revisori** | Mario Celzo, Renato Mancino |
 | **Stato** | Bozza |
 
+## Revision History
+
+| Data | Versione | Descrizione | Autori |
+|---|---|---|---|
+| 01/11/2026 | 1.0.0 | Stesura del caso d'uso nel RAD v2.9 (sezione 3.4.2.1) | Simona Sceral |
+| 19/11/2026 | 1.0.0 | Trascrizione fedele in Markdown dal RAD v2.9 (KCK-193) | Gabriele Karol Vicinanza |
+
 ## Identificativo
 
 UC_ACC_1

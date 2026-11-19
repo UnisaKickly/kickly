@@ -10,6 +10,13 @@
 | **Revisori** | Mario Celzo, Renato Mancino |
 | **Stato** | Bozza |
 
+## Revision History
+
+| Data | Versione | Descrizione | Autori |
+|---|---|---|---|
+| 01/11/2026 | 1.1.0 | Stesura del caso d'uso nel RAD v2.9 (sezione 3.4.2.2) | Gabriele Karol Vicinanza |
+| 19/11/2026 | 1.1.0 | Trascrizione fedele in Markdown dal RAD v2.9 (KCK-193) | Gabriele Karol Vicinanza |
+
 ## Identificativo
 
 UC_LEG_1
@@ -76,7 +83,7 @@ NA
 
 ## RF collegati
 
-- **RF_LEG_1 | CreazioneEGestioneLega | Alta**: Il sistema deve permettere a un Giocatore di creare una nuova lega specificandone il nome, la tipologia di partita ( 5vs5, 6v6, 7v7, 8vs8, 9vs9, 10v10, 11vs11 ) e livello di privacy (pubblica o privata), assumendo il ruolo di amministratore della lega e potendone modificare i dettagli
+- **RF_LEG_1 | CreazioneEGestioneLega | Alta**: Il sistema deve permettere a un Giocatore di creare una nuova lega specificandone il nome, la tipologia di partita ( 5vs5, 6v6, 7v7, 8vs8, 9v9, 10v10, 11vs11 ) e livello di privacy (pubblica o privata), assumendo il ruolo di amministratore della lega e potendone modificare i dettagli
 - **RF_LEG_2 | GeneratoreEGestioneInviti | Alta**: Il sistema deve permettere all’amministratore della lega di generare e condividere un codice o link di invito, e deve permettere gli altri Giocatori di unirsi alla lega tramite l’inserimento manuale del codice o l’accesso diretto via link
 
 ## Requisiti speciali
