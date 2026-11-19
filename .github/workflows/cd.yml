@@ -4,14 +4,20 @@
 # Gira a ogni push su `main`, cioe' quando ogni mercoledi' si fa il merge della
 # release settimanale da `develop` a `main` (vedi CONTRIBUTING.md, sezione 5).
 #
-# Produce due cose:
+# Produce tre cose:
 #   1. la versione web dell'app pubblicata su GitHub Pages
 #      (https://<organizzazione>.github.io/<repo>/), da mostrare alla demo;
 #   2. un APK Android scaricabile dalla pagina del run (sezione "Artifacts"),
-#      da installare sui telefoni per i test.
+#      da installare sui telefoni per i test;
+#   3. una GitHub Release con lo stesso APK allegato: gli Artifacts scadono dopo
+#      30 giorni, le Release no (serve per avere le build vecchie alla consegna).
 #
-# Prerequisito (una volta sola, lo fanno i PM): Settings -> Pages ->
-# Source = "GitHub Actions".
+# Prerequisiti (una volta sola, li fanno i PM):
+#   - Settings -> Pages -> Source = "GitHub Actions";
+#   - Settings -> Secrets and variables -> Actions -> Secrets: SUPABASE_URL e
+#     SUPABASE_ANON_KEY (stessi valori del config.json locale). La chiave
+#     service_role NON va mai messa qui. Se mancano, la build riesce lo stesso
+#     ma l'app mostra "Configurazione mancante" (e il run mostra un avviso).
 # =============================================================================
 name: CD
 
@@ -28,36 +34,34 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  FLUTTER_VERSION: "3.47.0"
-
 jobs:
   build-web:
     name: Build web per GitHub Pages
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # URL e chiave publishable/anon di Supabase arrivano dai secret del
+    # repository. Passati via env e non interpolati nel comando, come in ci.yml.
+    # La CI (ci.yml) invece resta senza chiavi: i test non le usano.
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v7
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
+      - name: Prepara Flutter
+        uses: ./.github/actions/setup-flutter
 
-      - run: flutter pub get
+      - name: Controlla la configurazione di Supabase
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::Secret SUPABASE_URL / SUPABASE_ANON_KEY mancanti: l'app pubblicata mostrera' 'Configurazione mancante' (vedi main.dart e l'intestazione di cd.yml)."
+          fi
 
       # Su GitHub Pages l'app non sta nella radice del dominio ma in
       # /<nome-repo>/: --base-href dice a Flutter dove trovare i suoi file.
-      # URL e chiave publishable/anon di Supabase arrivano dai secret del
-      # repository (Settings -> Secrets and variables -> Actions): senza, l'app
-      # pubblicata mostrerebbe "Configurazione mancante" (vedi main.dart).
-      # Passati via env e non interpolati nel comando, come in ci.yml.
-      # La CI (ci.yml) invece resta senza chiavi: i test non le usano.
+      # --dart-define passa a Flutter la configurazione di Supabase (la stessa
+      # che in locale arriva da --dart-define-from-file=config.json).
       - name: Compila l'app web
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: >-
           flutter build web --release
           --base-href "/${{ github.event.repository.name }}/"
@@ -89,8 +93,21 @@ jobs:
     name: Build APK Android
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Questo job compila codice e plugin di terze parti (pub, Gradle): resta con
+    # i permessi di sola lettura del workflow. La GitHub Release, che richiede
+    # la scrittura, la crea il job `release` qui sotto.
+    # Stessi secret della build web: l'APK si collega al progetto Supabase.
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    # Il tag della Release viene calcolato qui (serve il pubspec.yaml).
+    outputs:
+      tag: ${{ steps.versione.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Il token non resta salvato in .git/config durante la build.
+          persist-credentials: false
 
       # Gradle (il sistema di build Android) richiede Java.
       - uses: actions/setup-java@v6
@@ -98,23 +115,23 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
+      - name: Prepara Flutter
+        uses: ./.github/actions/setup-flutter
 
-      - run: flutter pub get
+      - name: Controlla la configurazione di Supabase
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::warning::Secret SUPABASE_URL / SUPABASE_ANON_KEY mancanti: l'APK mostrera' 'Configurazione mancante' (vedi l'intestazione di cd.yml)."
+          fi
 
       # APK firmato con la chiave di debug: va bene per installarlo sui
       # telefoni del team, NON per pubblicarlo sul Play Store.
-      # Stessi secret della build web: l'APK si collega al progetto Supabase.
+      # --build-number: il "versionCode" di Android cresce a ogni run, cosi'
+      # un APK nuovo si installa sopra quello vecchio senza disinstallare.
       - name: Compila l'APK
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: >-
           flutter build apk --release
+          --build-number="${{ github.run_number }}"
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
           --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
@@ -124,3 +141,41 @@ jobs:
           name: kickly-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      # Tag della Release: <versione del pubspec>-build.<n>, es. v0.1.0-build.7.
+      - name: Calcola il tag della Release
+        id: versione
+        run: |
+          version=$(grep '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//; s/\+.*//')
+          echo "tag=v${version}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  # GitHub Release (marcata "pre-release": l'APK e' firmato con la chiave di
+  # debug) con l'APK allegato. E' un job separato perche' e' l'UNICO che ha
+  # bisogno del permesso di scrittura: cosi' il token con `contents: write` non
+  # e' mai visibile al codice di terze parti che gira durante la build.
+  # Non fa checkout del codice: scarica solo l'APK gia' compilato.
+  # Se fallisce (es. regole sui tag) NON fa fallire la CD
+  # (`continue-on-error`): l'APK e' gia' disponibile tra gli Artifacts.
+  release:
+    name: GitHub Release con l'APK
+    needs: build-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: write # creare tag e Release
+      actions: read # scaricare l'artifact del run
+    steps:
+      - name: Crea la GitHub Release con l'APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build-android.outputs.tag }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name kickly-apk --dir apk
+          mv apk/app-release.apk "kickly-${TAG}.apk"
+          gh release create "$TAG" "kickly-${TAG}.apk" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Kickly ${TAG}" \
+            --notes "Build automatica della CD dal commit ${GITHUB_SHA}. APK firmato con la chiave di debug: solo per i test del team."
