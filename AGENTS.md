@@ -39,6 +39,7 @@ migration Pietro Senatore. Chi ha bisogno di modificarle lo chiede nel ticket.
 - Branch `<tipo>/KCK-<n>-descrizione`, commit `feat|fix|chore|docs: KCK-<n> descrizione`,
   titolo PR `KCK-<n>: titolo` (vedi CONTRIBUTING.md).
 - Commenti in italiano su ogni classe e metodo non banale: cosa fa e perche'.
+- Design goal: nei documenti e nel codice si citano con l'ID dell'SDD v1.0 (`DG_5`, `DG_8`, `DG_10`...), non con il rank. Nei ticket compare il rank ("DG9" = rank 9 = `DG_8`): ricavane l'ID dalla tabella di `docs/fonti/Kickly_SDD_v1.0.pdf` §1.2.
 
 ## Regole
 Sempre:
@@ -56,7 +57,7 @@ Chiedi prima:
 - nuove dipendenze in `pubspec.yaml` (il PM verifica che esistano, siano mantenute e con licenza compatibile).
 
 Mai:
-- import di `supabase_flutter`, `firebase_*` o `flutter_stripe` in `presentation/` e `domain/` (DG9);
+- import di `supabase_flutter`, `firebase_*` o `flutter_stripe` in `presentation/` e `domain/` (design goal DG_8 dell'SDD v1.0, rank 9: nei ticket e nel check CI "Controlli DG9" e' chiamato "DG9");
 - chiave segreta Stripe, chiavi o password nel repository: solo variabili d'ambiente / secret; dati di test sempre fittizi;
 - modificare un test esistente per farlo passare, `skip`, rimuovere asserzioni;
 - push su `main` o `develop`, modifiche a `.github/` o a questo file;

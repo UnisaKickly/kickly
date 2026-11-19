@@ -65,7 +65,7 @@ package "Gestione Strutture e Pagamenti - parte Strutture" {
 package "Gestione Strutture e Pagamenti - parte Pagamenti" {
   component "Presentation\nGestionePagamentiGUI" as PagamentiGUI
   component "Domain\nGestionePagamentiControl" as PagamentiControl
-  ' GatewayPagamenti e' l'unico punto di accesso a Stripe Connect (DG8, DG9).
+  ' GatewayPagamenti e' l'unico punto di accesso a Stripe Connect (DG_8 Implementazione e DG_9 Sicurezza dei dati di pagamento, SDD v1.0 §1.2).
   component "Data\nTransazioneRepository\nQuotaRepository\nGatewayPagamenti" as PagamentiRepository
   PagamentiGUI --> PagamentiControl
   PagamentiControl --> PagamentiRepository
