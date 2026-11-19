@@ -164,3 +164,19 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Decisione:** Se nella lega restano altri membri, diventa amministratore il membro con piu' presenze confermate nelle partite della lega (Partecipazione con risposta confermata); a parita', il primo in ordine alfabetico di cognome e nome. Se non resta nessun altro membro, la lega viene cancellata. Si calcola con i dati esistenti: nessuna nuova colonna e nessuna modifica al class diagram o alla migration A.
 * **Ticket coinvolti:** KCK-204, KCK-212 (CancellazioneAccountControl); test frame TF_SS_11, TF_SS_12 (KCK-247)
 
+---
+
+## D20 – Eta' in registrazione
+
+* **Problema:** UC_ACC_1 chiede l'eta' nel modulo di registrazione (passo 2) ma il RAD non dice se e' obbligatoria ne' se c'e' un'eta' minima.
+* **Decisione:** L'eta' e' obbligatoria e deve essere di almeno 14 anni (eta' minima in Italia per dare da soli il consenso ai servizi online, GDPR art. 8; limite superiore 120). Una registrazione senza eta' o con eta' fuori intervallo e' un caso di UC_ACC_1 E2 (dati non validi). Nel database: `account.eta` NOT NULL con CHECK.
+* **Ticket coinvolti:** KCK-202, KCK-250, KCK-198; test frame TF_ACC_03 (KCK-232)
+
+---
+
+## D21 – Unicita' del nome della lega
+
+* **Problema:** UC_LEG_1 E1 prevede l'errore "nome lega gia' in uso" ma non dice se due nomi che differiscono solo per maiuscole o spazi sono lo stesso nome.
+* **Decisione:** Il nome della lega e' unico senza distinguere maiuscole e spazi iniziali/finali ("Champions Giovedi'" e "champions giovedi' " sono lo stesso nome). Nel database: indice UNIQUE su `lower(btrim(nome))` e CHECK sul nome non vuoto, cosi' il controllo regge anche a due creazioni contemporanee; il Control mostra l'errore di E1. Vale anche per la modifica (D17).
+* **Ticket coinvolti:** KCK-202, KCK-242, KCK-249; test frame TF_LEG_04, TF_LEG_05, TF_LEG_08 (KCK-232)
+
