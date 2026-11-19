@@ -98,3 +98,52 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Decisione:** La cancellazione dei dati personali non si blocca mai: la migration lascia quindi passare questo caso (come fa gia' il trigger di integrita', e la scelta e' da commentare in italiano nel codice SQL). Come si risolve la lega (promozione di un membro o cancellazione della lega) lo decide `CancellazioneAccountControl` nel suo ticket, con un piano approvato dai PM prima di scrivere codice. Nessuna nuova colonna e nessuna nuova schermata decise qui.
 * **Ticket coinvolti:** KCK-202; KCK-204, KCK-212
 
+---
+
+## D13 – Operazioni non permesse e comandi riservati
+
+* **Problema:** Il RAD prevede operazioni riservate (all'amministratore della lega, ai partecipanti di una partita, agli iscritti di una partita pubblica) e entry condition che le limitano, ma non dice cosa vede chi non ha il permesso.
+* **Decisione:** Regola unica per tutti i casi d'uso: il comando non e' visibile a chi non puo' usarlo (come gia' dice la tabella degli oggetti per DashboardLega: "i comandi riservati agli amministratori"); se la richiesta arriva comunque (es. chiamata diretta), il Control la rifiuta con un messaggio di errore e non modifica nulla. Vale per: voto su partita non Conclusa o da non partecipante (UC_MVP_1), condivisione di partita non pubblica o da non iscritto (UC_SS_1), modifica della lega, generazione dell'invito e gestione membri da parte di un non amministratore (RF_LEG_1..3). Il controllo lato server resta nelle policy RLS.
+* **Ticket coinvolti:** KCK-259, KCK-200, KCK-251, KCK-255, KCK-242, KCK-249, KCK-256, KCK-199, KCK-222, KCK-228; test frame TF_MVP_03, TF_MVP_04, TF_SS_05, TF_SS_06 (KCK-247), TF_LEG_07, TF_LEG_11, TF_LEG_23 (KCK-232)
+
+---
+
+## D14 – Voto MVP: autovoto non ammesso
+
+* **Problema:** UC_MVP_1 mostra "l'elenco dei giocatori partecipanti" (passo 2) ma non dice se il votante puo' votare se stesso.
+* **Decisione:** L'autovoto non e' ammesso: il votante non compare nell'elenco dei giocatori votabili. Una richiesta di voto per se stessi viene rifiutata con un messaggio di errore e il voto non e' registrato.
+* **Ticket coinvolti:** KCK-259, KCK-200; test frame TF_MVP_07 (KCK-247)
+
+---
+
+## D15 – Classifica: lista vuota e ordine a parita' di titoli
+
+* **Problema:** RF_POS_2 chiede la classifica dei giocatori con piu' titoli MVP e le relative statistiche, ma non dice cosa mostrare se non ci sono titoli ne' come ordinare i pari merito.
+* **Decisione:** Senza titoli MVP assegnati la classifica mostra il messaggio "Nessuna classifica disponibile". L'ordine e': titoli MVP vinti, poi voti ricevuti, poi gol, poi assist, poi ordine alfabetico del nome (sono i dati che la tabella degli oggetti attribuisce a ClassificaControl). Gol e assist non inseriti valgono 0 (D2).
+* **Ticket coinvolti:** KCK-209, KCK-217; test frame TF_MVP_09, TF_MVP_11 (KCK-247)
+
+---
+
+## D16 – Player Card incompleta, login fallito e recupero password
+
+* **Problema:** UC_ACC_1 non dice cosa succede se la Player Card viene confermata incompleta; RF_ACC_3 e RF_ACC_4 non hanno un caso d'uso e non descrivono gli esiti di errore.
+* **Decisione:**
+  * Player Card senza ruolo in campo o piede dominante: come UC_ACC_1 E2, errore sul campo, si resta sulla configurazione e la Player Card non viene salvata.
+  * Login fallito: lo stesso messaggio generico "Email o password non corretti" per email non registrata e per password errata, cosi' non si rivela quali email sono registrate; campo vuoto: errore sul campo. In ogni caso si resta su FormLogin senza autenticare.
+  * Recupero password con email non associata: lo stesso messaggio del caso valido ("Se l'email e' registrata riceverai un messaggio") e nessuna email inviata.
+  * Collegamento di recupero scaduto o non valido: messaggio "Collegamento scaduto o non valido", password invariata, si ripete la richiesta di recupero.
+  * Nuova password debole nel recupero: stesso controllo e stesso tipo di messaggio di UC_ACC_1 E2; si resta sul modulo.
+* **Ticket coinvolti:** KCK-250, KCK-198, KCK-208, KCK-215, KCK-234, KCK-262; test frame TF_ACC_07, TF_ACC_11-13, TF_ACC_16-18 (KCK-232)
+
+---
+
+## D17 – Leghe: nome gia' in uso in modifica, gia' membro, unico amministratore, non membro
+
+* **Problema:** UC_LEG_1 e RF_LEG_1..4 non dicono cosa succede in quattro casi limite.
+* **Decisione:**
+  * Rinominare la lega con un nome gia' in uso: come UC_LEG_1 E1 (errore, campo evidenziato, si resta su FormLega, nessuna modifica).
+  * Codice o link usato da chi e' gia' membro: messaggio "Sei gia' membro di questa lega", nessuna nuova adesione.
+  * L'unico amministratore non puo' rimuovere se stesso: il class diagram prevede almeno un amministratore per lega (1..*); la richiesta e' rifiutata con "Nomina un altro amministratore prima di uscire". La cancellazione dell'account resta regolata da D12.
+  * Un non membro che apre una lega non vede la DashboardLega: per una lega pubblica vede il comando per unirsi (UC_LEG_1 A1), per una privata il messaggio "Lega privata: serve un invito".
+* **Ticket coinvolti:** KCK-242, KCK-249, KCK-256, KCK-199, KCK-222, KCK-228, KCK-207, KCK-216; test frame TF_LEG_08, TF_LEG_16, TF_LEG_22, TF_LEG_25 (KCK-232)
+
