@@ -10,6 +10,13 @@
 | **Revisori** | Mario Celzo, Renato Mancino |
 | **Stato** | Bozza |
 
+## Revision History
+
+| Data | Versione | Descrizione | Autori |
+|---|---|---|---|
+| 01/11/2026 | 1.1.0 | Stesura del caso d'uso nel RAD v2.9 (sezione 3.4.2.3) | Pietro Senatore |
+| 19/11/2026 | 1.1.0 | Trascrizione fedele in Markdown dal RAD v2.9 (KCK-193) | Gabriele Karol Vicinanza |
+
 ## Identificativo
 
 UC_PAR_1
@@ -79,7 +86,7 @@ NA
 
 ## Requisiti speciali
 
-N/A
+- **RNF_IMP_1 | VincoliTecnologici | Alta**: Il sistema deve essere sviluppato con il framework Flutter per l’interfaccia utente e con la piattaforma Supabase per il backend, che gestisce l'archiviazione dei dati e l'autenticazione degli utenti; le notifiche push sono inviate tramite Firebase Cloud Messaging.
 
 ## Tabella degli oggetti
 
