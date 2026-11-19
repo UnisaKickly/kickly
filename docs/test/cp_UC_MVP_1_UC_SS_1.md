@@ -19,10 +19,9 @@ stessa funzione**: le categorie di funzioni diverse non si combinano. Una scelta
 Fonti degli esiti attesi: i casi d'uso UC_MVP_1 e UC_SS_1, RAD v2.9 §3.2
 (RF_POS_1, RF_POS_2, RF_NOT_1, RF_NOT_2, RF_SS_1, RF_SS_2) e §3.3 (RNF_L_1), la
 tabella degli oggetti (§3.4.4.1.4 e §3.4.4.1.6), SDD v1.4 DG4 e
-`docs/modelli/DECISIONI_RAD.md` (D1, D2, D9, D10, D12, D13, D14, D15). Dove il RAD
+`docs/modelli/DECISIONI_RAD.md` (D1, D2, D9, D10, D12-D15, D18, D19). Dove il RAD
 non dice l'esito, l'esito viene dalle decisioni dei PM (risposte alle domande
-della sezione 4): nessun esito e' stato ipotizzato. Resta da completare solo
-TF_SS_11, che D12 affida al piano di KCK-204 / KCK-212.
+della sezione 4): nessun esito e' stato ipotizzato.
 
 Fuori dai frame: RNF_PRE_2 (DG8, voto registrato entro 10 secondi), RNF_A_1
 (DG5, statistiche aggiornate entro 1 minuto e senza perdite) e RNF_PRE_1 (DG11,
@@ -38,7 +37,7 @@ RNF_PRE_3 in `cp_UC_PAR_1_UC_PAG_1.md`.
 | F2 Classifica | `ClassificaControl` | RF_POS_2 | nessuno (consultazione) | titoli MVP assegnati; gol e assist inseriti (D2); parita' di titoli |
 | F3 Invio notifica | `NotificaControl` | RF_NOT_1, RF_NOT_2 | evento rilevante | preferenza del destinatario per quella tipologia |
 | F4 Consultazione notifica | `NotificaControl` | RF_NOT_1, tabella degli oggetti | notifica aperta | stato di lettura |
-| F5 Preferenze notifiche | `PreferenzeNotificheControl` | RF_NOT_2 | operazione sulla tipologia | nessuna |
+| F5 Preferenze notifiche | `PreferenzeNotificheControl` | RF_NOT_2, D18 | operazione sulla tipologia | nessuna |
 | F6 Condivisione partita | `GestioneCondivisioneControl` | UC_SS_1, RF_SS_1 | opzione scelta nel menu di condivisione | privacy della partita; iscrizione del Giocatore; connessione alla generazione del link |
 | F7 Accesso da dispositivo | `SicurezzaAccessiControl` | RF_SS_2 | dispositivo di accesso | dispositivi gia' registrati per l'Account |
 | F8 Cancellazione account | `CancellazioneAccountControl` | RNF_L_1, DG4 | nessuno (richiesta di eliminazione) | transazioni da conservare; Account unico amministratore di una lega (D12) |
@@ -61,7 +60,7 @@ contraddittorie.
 | Voto gia' espresso | no | |
 | Voto gia' espresso | si', nella stessa votazione | `[error]` (flusso alternativo 3.1: operazione bloccata) |
 | Giocatore votato | un altro partecipante | |
-| Giocatore votato | se stesso (valore limite) | `[single]` |
+| Giocatore votato | se stesso (valore limite) | `[error]` (autovoto non ammesso, D14) |
 | Connessione all'accesso alla sezione | raggiungibile | |
 | Connessione all'accesso alla sezione | non raggiungibile | `[error]` |
 | Connessione alla conferma | raggiungibile | |
@@ -101,7 +100,10 @@ Una sola scelta per la categoria: il metodo lo ammette (slide "Scelte").
 |---|---|---|
 | Operazione | attivare una tipologia | |
 | Operazione | disattivare una tipologia | |
-| Operazione | personalizzare una tipologia | |
+
+"Personalizzare" (RF_NOT_2) significa scegliere tipologia per tipologia quali
+notifiche ricevere (D18): coincide con attivare o disattivare una tipologia e
+non e' una scelta a parte.
 
 ### F6 Condivisione partita
 
@@ -131,7 +133,8 @@ Una sola scelta per la categoria: il metodo lo ammette (slide "Scelte").
 | Transazioni da conservare | nessuna | |
 | Transazioni da conservare | una o piu' transazioni di pagamento (obblighi di legge) | |
 | Amministrazione di leghe | non e' l'unico amministratore di una lega | |
-| Amministrazione di leghe | e' l'unico amministratore di una lega (D12) | `[single]` |
+| Amministrazione di leghe | unico amministratore di una lega con altri membri (D12, D19) | `[single]` |
+| Amministrazione di leghe | unico amministratore e unico membro di una lega (valore limite, D19) | `[single]` |
 
 ## 3. Test frame
 
@@ -179,9 +182,8 @@ ticket che implementa il Control corrispondente.
 
 | Id | Scelte combinate | Preparazione | Esito atteso | Fonte |
 |---|---|---|---|---|
-| TF_NOT_05 | attivare una tipologia | Tipologia disattivata nelle preferenze dell'Account | La tipologia risulta attiva nelle preferenze salvate nell'Account | RF_NOT_2, tabella degli oggetti (`PreferenzeNotificheControl`), D10 |
-| TF_NOT_06 | disattivare una tipologia | Tipologia attiva nelle preferenze dell'Account | La tipologia risulta disattivata nelle preferenze salvate nell'Account | RF_NOT_2, D10 |
-| TF_NOT_07 | personalizzare una tipologia | Tipologia attiva; l'utente ne modifica la personalizzazione | La personalizzazione e' salvata nelle preferenze dell'Account | RF_NOT_2, D10 |
+| TF_NOT_05 | attivare una tipologia | Tipologia disattivata nelle preferenze dell'Account | La tipologia risulta attiva in `Account.preferenzeNotifiche`; da quel momento gli eventi di quella tipologia generano una `Notifica` per l'Account (come TF_NOT_01) | RF_NOT_2, tabella degli oggetti (`PreferenzeNotificheControl`), D10, D18 |
+| TF_NOT_06 | disattivare una tipologia | Tipologia attiva nelle preferenze dell'Account | La tipologia risulta disattivata in `Account.preferenzeNotifiche`; da quel momento gli eventi di quella tipologia non generano notifiche per l'Account (come TF_NOT_02) | RF_NOT_2, D10, D18 |
 
 ### 3.6 F6 Condivisione partita (UC_SS_1, RF_SS_1)
 
@@ -207,9 +209,10 @@ ticket che implementa il Control corrispondente.
 |---|---|---|---|---|
 | TF_SS_09 | nessuna transazione, non unico amministratore | L'utente richiede l'eliminazione dell'account | L'Account passa a `in_cancellazione`; entro 30 giorni dalla richiesta tutti i dati personali sono cancellati in modo definitivo dagli archivi | RNF_L_1, DG4, D9 |
 | TF_SS_10 | transazioni di pagamento da conservare, non unico amministratore | L'utente con transazioni di pagamento registrate richiede l'eliminazione | Entro 30 giorni i dati personali sono cancellati; le transazioni di pagamento restano conservate ma dissociate dall'identita' dell'utente | RNF_L_1, DG4 |
-| TF_SS_11 | unico amministratore di una lega | L'utente e' l'unico amministratore di una lega e richiede l'eliminazione | La cancellazione dei dati personali procede comunque (D12). Come viene risolta la lega: **DA CONFERMARE** nel piano approvato di KCK-204 / KCK-212 (domanda 8) | RNF_L_1, D12 |
+| TF_SS_11 | unico amministratore di una lega con altri membri | L'utente e' l'unico amministratore di una lega con altri membri e richiede l'eliminazione | La cancellazione dei dati personali procede comunque (D12); diventa amministratore il membro con piu' presenze confermate nelle partite della lega (a parita', il primo in ordine alfabetico di cognome e nome) | RNF_L_1, D12, D19 |
+| TF_SS_12 | unico amministratore e unico membro di una lega | L'utente e' l'unico membro della lega e ne e' l'amministratore; richiede l'eliminazione | La cancellazione dei dati personali procede comunque (D12) e la lega viene cancellata | RNF_L_1, D12, D19 |
 
-Totale frame: 29 (TF_MVP_01..11, TF_NOT_01..07, TF_SS_01..11)
+Totale frame: 29 (TF_MVP_01..11, TF_NOT_01..06, TF_SS_01..12)
 
 Copertura: UC_MVP_1 3.1 -> TF_MVP_02, 1.1 -> TF_MVP_05, 4.1 -> TF_MVP_06;
 UC_SS_1 A1 -> TF_SS_03, E1 -> TF_SS_04. Casi richiesti dal ticket: voto
@@ -229,4 +232,5 @@ Risposte dei PM (Renato Mancino, 19/11/2026), registrate in
 5. TF_MVP_11, pari merito. **Risposta:** titoli MVP, poi voti ricevuti, gol, assist, ordine alfabetico (D15).
 6. TF_SS_05, partita non pubblica. **Risposta:** comando "Condividi" non disponibile; richiesta diretta rifiutata (D13).
 7. TF_SS_06, Giocatore non iscritto. **Risposta:** come la 6 (D13).
-8. TF_SS_11, lega dell'unico amministratore cancellato. **Risposta:** resta come da D12: lo decide il piano approvato di `CancellazioneAccountControl` (KCK-204 / KCK-212), dove il frame va completato. Il test di TF_SS_11 si scrive in quel ticket.
+8. TF_SS_11, lega dell'unico amministratore cancellato. **Risposta:** diventa amministratore il membro con piu' presenze confermate nella lega (a parita', ordine alfabetico); se non ci sono altri membri la lega viene cancellata (D19). Aggiunto il frame limite TF_SS_12.
+9. Il frame tolto su "personalizzare" una tipologia (richiesta di revisione). **Risposta:** significa scegliere tipologia per tipologia, quindi coincide con attivare o disattivare (D18): tolto il frame; TF_NOT_05 e TF_NOT_06 dicono ora cosa cambia nell'invio.

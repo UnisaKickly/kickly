@@ -97,6 +97,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Problema:** Il class diagram prevede 1..* amministratori per lega, ma la cancellazione dell'account dell'unico amministratore (RNF_L_1) puo' lasciare la lega senza amministratori, e il RAD non dice cosa succede.
 * **Decisione:** La cancellazione dei dati personali non si blocca mai: la migration lascia quindi passare questo caso (come fa gia' il trigger di integrita', e la scelta e' da commentare in italiano nel codice SQL). Come si risolve la lega (promozione di un membro o cancellazione della lega) lo decide `CancellazioneAccountControl` nel suo ticket, con un piano approvato dai PM prima di scrivere codice. Nessuna nuova colonna e nessuna nuova schermata decise qui.
 * **Ticket coinvolti:** KCK-202; KCK-204, KCK-212
+* **Aggiornamento (19/11/2026):** come si risolve la lega e' stato deciso dai PM in D19.
 
 ---
 
@@ -146,4 +147,20 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
   * L'unico amministratore non puo' rimuovere se stesso: il class diagram prevede almeno un amministratore per lega (1..*); la richiesta e' rifiutata con "Nomina un altro amministratore prima di uscire". La cancellazione dell'account resta regolata da D12.
   * Un non membro che apre una lega non vede la DashboardLega: per una lega pubblica vede il comando per unirsi (UC_LEG_1 A1), per una privata il messaggio "Lega privata: serve un invito".
 * **Ticket coinvolti:** KCK-242, KCK-249, KCK-256, KCK-199, KCK-222, KCK-228, KCK-207, KCK-216; test frame TF_LEG_08, TF_LEG_16, TF_LEG_22, TF_LEG_25 (KCK-232)
+
+---
+
+## D18 – Significato di "personalizzare" le notifiche
+
+* **Problema:** RF_NOT_2 permette di "attivare, disattivare o personalizzare le tipologie di notifiche da ricevere", ma il RAD non dice cosa significhi "personalizzare" oltre ad attivare e disattivare.
+* **Decisione:** "Personalizzare" significa scegliere, tipologia per tipologia, quali notifiche ricevere: non e' un'operazione diversa da attivare o disattivare una singola tipologia. Le preferenze sono salvate in `Account.preferenzeNotifiche` (D10); una tipologia disattivata non genera notifiche per quell'Account. Nessun altro parametro (canale, orari) senza chiedere ai PM.
+* **Ticket coinvolti:** KCK-202, KCK-196 (RF_NOT_2); test frame TF_NOT_02, TF_NOT_05, TF_NOT_06 (KCK-247)
+
+---
+
+## D19 – Lega dell'unico amministratore che cancella l'account
+
+* **Problema:** D12 non blocca la cancellazione dell'unico amministratore di una lega, ma lasciava al ticket di CancellazioneAccountControl la scelta su cosa succede alla lega; il class diagram richiede almeno un amministratore (1..*).
+* **Decisione:** Se nella lega restano altri membri, diventa amministratore il membro con piu' presenze confermate nelle partite della lega (Partecipazione con risposta confermata); a parita', il primo in ordine alfabetico di cognome e nome. Se non resta nessun altro membro, la lega viene cancellata. Si calcola con i dati esistenti: nessuna nuova colonna e nessuna modifica al class diagram o alla migration A.
+* **Ticket coinvolti:** KCK-204, KCK-212 (CancellazioneAccountControl); test frame TF_SS_11, TF_SS_12 (KCK-247)
 
