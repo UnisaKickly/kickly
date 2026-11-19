@@ -7,9 +7,10 @@
 ## Contesto
 App mobile per organizzare partite di calcio amatoriale: leghe, RSVP, prenotazione
 del campo, quote in app (Stripe Connect, solo test), voto MVP, notifiche.
-La specifica e' NELLA REPO (`docs/`), ricavata da RAD v2.9 e SDD v1.0: non hai accesso
+La specifica e' NELLA REPO (`docs/`), ricavata da RAD v2.9 e SDD v1.4: non hai accesso
 al Drive, quindi se un'informazione non e' in `docs/` o nel ticket, chiedi. Se un ticket cita
-"RAD v2.9 (Drive)" o "SDD v1.0 (Drive)", usa `docs/fonti/Kickly_RAD_v2.9.pdf` e `docs/fonti/Kickly_SDD_v1.0.pdf`.
+"RAD v2.9 (Drive)" o "SDD v1.0 (Drive)" / "SDD v1.4 (Drive)", usa `docs/fonti/Kickly_RAD_v2.9.pdf` e `docs/fonti/Kickly_SDD_v1.4.pdf`
+(la v1.4 del 16/11/2026 e' la versione in vigore; `Kickly_SDD_v1.0.pdf` resta solo come storico).
 
 ## Stack e comandi
 Flutter 3.47.0 / Dart, Supabase (PostgreSQL + RLS, Auth, Realtime, Edge Functions in
@@ -39,7 +40,7 @@ migration Pietro Senatore. Chi ha bisogno di modificarle lo chiede nel ticket.
 - Branch `<tipo>/KCK-<n>-descrizione`, commit `feat|fix|chore|docs: KCK-<n> descrizione`,
   titolo PR `KCK-<n>: titolo` (vedi CONTRIBUTING.md).
 - Commenti in italiano su ogni classe e metodo non banale: cosa fa e perche'.
-- Design goal: nei documenti e nel codice si citano con l'ID dell'SDD v1.0 (`DG_5`, `DG_8`, `DG_10`...), non con il rank. Nei ticket compare il rank ("DG9" = rank 9 = `DG_8`): ricavane l'ID dalla tabella di `docs/fonti/Kickly_SDD_v1.0.pdf` §1.2.
+- Design goal: si citano con il rank della tabella di `docs/fonti/Kickly_SDD_v1.4.pdf` §1.2 (`DG1`...`DG12`), come nei ticket e nel check CI: "DG9" e' il rank 9, Portabilita' e modificabilita'. L'SDD v1.4 non ha ID `DG_n`; quelli della v1.0 (`DG_8`...) non si usano piu'.
 
 ## Regole
 Sempre:
@@ -57,7 +58,7 @@ Chiedi prima:
 - nuove dipendenze in `pubspec.yaml` (il PM verifica che esistano, siano mantenute e con licenza compatibile).
 
 Mai:
-- import di `supabase_flutter`, `firebase_*` o `flutter_stripe` in `presentation/` e `domain/` (design goal DG_8 dell'SDD v1.0, rank 9: nei ticket e nel check CI "Controlli DG9" e' chiamato "DG9");
+- import di `supabase_flutter`, `firebase_*` o `flutter_stripe` in `presentation/` e `domain/` (DG9, Portabilita' e modificabilita', SDD v1.4 §1.2);
 - chiave segreta Stripe, chiavi o password nel repository: solo variabili d'ambiente / secret; dati di test sempre fittizi;
 - modificare un test esistente per farlo passare, `skip`, rimuovere asserzioni;
 - push su `main` o `develop`, modifiche a `.github/` o a questo file;
@@ -87,6 +88,6 @@ apri una sessione nuova e dai come prima istruzione il contenuto del file.
   decisioni sui punti non coperti dal RAD
 - `docs/sdd/design_goals.md` design goal e trade-off; `docs/sdd/*.puml` component e deployment
 - `docs/test/` category partition e test frame
-- `docs/fonti/` RAD v2.9 e SDD v1.0 originali (PDF): solo se il ticket li cita, altrimenti usa i file in `docs/`.
+- `docs/fonti/` RAD v2.9 e SDD v1.4 originali (PDF; la v1.0 resta come storico): solo se il ticket li cita, altrimenti usa i file in `docs/`.
   Diagrammi e mock-up nei PDF sono immagini: se non riesci a leggerli, chiedi di allegare le pagine
 - `CONTRIBUTING.md` flusso Git/Jira

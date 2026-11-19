@@ -1,7 +1,7 @@
-# Kickly – Class diagram ristrutturato (SDD v1.0, sezione 4.2)
+# Kickly – Class diagram ristrutturato (SDD v1.4, sezione 4.2)
 
 Trascrizione testuale del class diagram ristrutturato dell'SDD
-(`docs/fonti/Kickly_SDD_v1.0.pdf`, §4.2). E' la specifica per migration,
+(`docs/fonti/Kickly_SDD_v1.4.pdf`, §4.2). E' la specifica per migration,
 entity Dart e repository finche' non c'e' `class.puml` (KCK-201), che dovra'
 coincidere con questo file. **Non si aggiungono classi, attributi o tipi:**
 se serve qualcosa che qui non c'e', si chiede ai PM.
