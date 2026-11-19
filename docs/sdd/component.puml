@@ -1,10 +1,17 @@
 @startuml
 ' Component diagram di Kickly (SDD v1.0, §3.2.1 e §3.2.2).
 ' Ogni sottosistema e' diviso in GUI (Presentation), Control (Domain) e Repository (Data).
-' I nomi delle classi sono ESATTAMENTE quelli dell'SDD (AGENTS.md): chi scrive codice li riusa.
+' I nomi dei component sono ESATTAMENTE quelli del diagramma architetturale dell'SDD (§3.2.2).
+' ATTENZIONE: un component Gestione*GUI / Gestione*Control NON e' una classe. E' lo strato
+' del sottosistema che "raggruppa le classi" (SDD §3.2.2), cioe' un package/cartella.
+' Nel codice le classi Control si chiamano come nella tabella degli oggetti del RAD v2.9
+' (§3.4.4.1.1-§3.4.4.1.6), elencate sotto ogni sottosistema.
+' Esempio: il component GestionePartiteControl contiene la classe GestionePartitaControl.
 ' Tutti i Repository si appoggiano alla Persistenza (SupabaseClient).
 title Kickly - Component diagram (SDD §3.2.1 e §3.2.2)
 
+' Classi Control (RAD §3.4.4.1.1): RegistrazioneControl, AutenticazioneControl,
+' RecuperoPasswordControl.
 package "Gestione Utenza" {
   component "Presentation\nGestioneUtenzaGUI" as UtenzaGUI
   component "Domain\nGestioneUtenzaControl" as UtenzaControl
@@ -13,6 +20,7 @@ package "Gestione Utenza" {
   UtenzaControl --> UtenzaRepository
 }
 
+' Classi Control (RAD §3.4.4.1.2): GestioneLegaControl, GestioneAdesioneControl.
 package "Gestione Leghe e Inviti" {
   component "Presentation\nGestioneLegheGUI" as LegheGUI
   component "Domain\nGestioneLegheControl" as LegheControl
@@ -21,6 +29,8 @@ package "Gestione Leghe e Inviti" {
   LegheControl --> LegheRepository
 }
 
+' Classi Control (RAD §3.4.4.1.6): GestioneCondivisioneControl, SicurezzaAccessiControl,
+' CancellazioneAccountControl.
 package "Gestione Rete Sociale e Sicurezza" {
   component "Presentation\nGestioneReteSocialeSicurezzaGUI" as ReteSicurezzaGUI
   component "Domain\nGestioneReteSocialeSicurezzaControl" as ReteSicurezzaControl
@@ -29,6 +39,8 @@ package "Gestione Rete Sociale e Sicurezza" {
   ReteSicurezzaControl --> ReteSicurezzaRepository
 }
 
+' Classi Control (RAD §3.4.4.1.3): GestionePartitaControl, PrenotazioneControl,
+' GestionePartecipazioneControl.
 package "Gestione Partite e RSVP" {
   component "Presentation\nGestionePartiteGUI" as PartiteGUI
   component "Domain\nGestionePartiteControl" as PartiteControl
@@ -40,6 +52,7 @@ package "Gestione Partite e RSVP" {
 ' Gestione Strutture e Pagamenti e' un solo sottosistema nell'SDD, ma nel diagramma
 ' architetturale (§3.2.2) e' diviso in due parti in base all'attore:
 ' GestioneStrutture (Gestore del Campo) e GestionePagamenti (Giocatore).
+' Classi Control (RAD §3.4.4.1.5): GestioneCampiControl.
 package "Gestione Strutture e Pagamenti - parte Strutture" {
   component "Presentation\nGestioneStruttureGUI" as StruttureGUI
   component "Domain\nGestioneStruttureControl" as StruttureControl
@@ -48,6 +61,7 @@ package "Gestione Strutture e Pagamenti - parte Strutture" {
   StruttureControl --> StruttureRepository
 }
 
+' Classi Control (RAD §3.4.4.1.5): GestioneTransazioniControl.
 package "Gestione Strutture e Pagamenti - parte Pagamenti" {
   component "Presentation\nGestionePagamentiGUI" as PagamentiGUI
   component "Domain\nGestionePagamentiControl" as PagamentiControl
@@ -57,6 +71,8 @@ package "Gestione Strutture e Pagamenti - parte Pagamenti" {
   PagamentiControl --> PagamentiRepository
 }
 
+' Classi Control (RAD §3.4.4.1.4): VotoMVPControl, ClassificaControl, NotificaControl,
+' PreferenzeNotificheControl.
 package "Gestione Voto MVP e Notifiche" {
   component "Presentation\nGestioneVotoMVPGUI" as VotoNotificheGUI
   component "Domain\nGestioneVotoMVPControl" as VotoNotificheControl
