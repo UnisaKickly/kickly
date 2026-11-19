@@ -24,7 +24,7 @@ VALUES
         'authenticated',
         'authenticated',
         'mario.rossi@example.test',
-        '',
+        extensions.crypt('KicklyTest2026!', extensions.gen_salt('bf')),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
         '{"nome":"Mario","cognome":"Rossi","eta":"28"}'::jsonb,
@@ -41,7 +41,7 @@ VALUES
         'authenticated',
         'authenticated',
         'luca.bianchi@example.test',
-        '',
+        extensions.crypt('KicklyTest2026!', extensions.gen_salt('bf')),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
         '{"nome":"Luca","cognome":"Bianchi","eta":"31"}'::jsonb,
@@ -58,10 +58,27 @@ VALUES
         'authenticated',
         'authenticated',
         'andrea.verdi@example.test',
-        '',
+        extensions.crypt('KicklyTest2026!', extensions.gen_salt('bf')),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
         '{"nome":"Andrea","cognome":"Verdi","eta":"25"}'::jsonb,
+        now(),
+        now(),
+        '',
+        '',
+        '',
+        ''
+    ),
+    (
+        '20200000-0000-4000-8000-000000000004',
+        '00000000-0000-0000-0000-000000000000',
+        'authenticated',
+        'authenticated',
+        'paolo.ferri@example.test',
+        extensions.crypt('KicklyTest2026!', extensions.gen_salt('bf')),
+        now(),
+        '{"provider":"email","providers":["email"]}'::jsonb,
+        '{"nome":"Paolo","cognome":"Ferri"}'::jsonb,
         now(),
         now(),
         '',
@@ -79,11 +96,19 @@ WHERE id IN (
     '20200000-0000-4000-8000-000000000003'
 );
 
+UPDATE public.account
+SET ruolo_account = 'GestoreCampo',
+    stato_onboarding = 'completato'
+WHERE id = '20200000-0000-4000-8000-000000000004';
+
 INSERT INTO public.giocatore (account_id, ruolo_preferito_in_campo, piede_dominante)
 VALUES
     ('20200000-0000-4000-8000-000000000001', 'Centrocampista', 'Destro'),
     ('20200000-0000-4000-8000-000000000002', 'Difensore', 'Sinistro'),
     ('20200000-0000-4000-8000-000000000003', 'Attaccante', 'Destro');
+
+INSERT INTO public.gestore_campo (account_id)
+VALUES ('20200000-0000-4000-8000-000000000004');
 
 INSERT INTO public.lega (
     id,

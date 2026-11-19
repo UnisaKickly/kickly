@@ -7,17 +7,28 @@ CREATE TABLE public.account (
     eta integer,
     stato_account text NOT NULL DEFAULT 'attivo',
     stato_onboarding text NOT NULL DEFAULT 'in_corso',
-    preferenze_notifiche jsonb NOT NULL DEFAULT '{}'::jsonb,
+    preferenze_notifiche text NOT NULL DEFAULT '{}',
     CONSTRAINT account_pkey PRIMARY KEY (id),
     CONSTRAINT account_auth_user_id_fkey
         FOREIGN KEY (id) REFERENCES auth.users (id) ON DELETE CASCADE,
     CONSTRAINT account_ruolo_account_check
-        CHECK (ruolo_account IS NULL OR ruolo_account IN ('Giocatore', 'GestoreCampo'))
+        CHECK (ruolo_account IS NULL OR ruolo_account IN ('Giocatore', 'GestoreCampo')),
+    CONSTRAINT account_nome_non_vuoto_check
+        CHECK (length(btrim(nome)) > 0),
+    CONSTRAINT account_cognome_non_vuoto_check
+        CHECK (length(btrim(cognome)) > 0),
+    CONSTRAINT account_eta_check
+        CHECK (eta IS NULL OR (eta >= 14 AND eta <= 120)),
+    CONSTRAINT account_stato_account_check
+        CHECK (stato_account IN ('attivo', 'in_cancellazione')),
+    CONSTRAINT account_stato_onboarding_check
+        CHECK (stato_onboarding IN ('in_corso', 'completato'))
 );
 
 COMMENT ON CONSTRAINT account_auth_user_id_fkey ON public.account IS
     'ON DELETE CASCADE elimina i dati personali dell''Account quando viene cancellato l''utente Auth, in conformità al DG4.';
 
+-- La coerenza tra ruolo e specializzazione è garantita dal Control di registrazione e dalle policy RLS, come deciso in D11.
 CREATE TABLE public.giocatore (
     account_id uuid NOT NULL,
     ruolo_preferito_in_campo text NOT NULL,
@@ -48,6 +59,8 @@ CREATE TABLE public.dispositivo_registrato (
     primo_accesso timestamptz NOT NULL,
     ultimo_accesso timestamptz NOT NULL,
     CONSTRAINT dispositivo_registrato_pkey PRIMARY KEY (id),
+    CONSTRAINT dispositivo_registrato_account_identificativo_key
+        UNIQUE (account_id, identificativo),
     CONSTRAINT dispositivo_registrato_account_id_fkey
         FOREIGN KEY (account_id) REFERENCES public.account (id) ON DELETE CASCADE
 );
@@ -125,18 +138,21 @@ BEGIN
     VALUES (
         NEW.id,
         NULL,
-        COALESCE(NEW.raw_user_meta_data ->> 'nome', ''),
-        COALESCE(NEW.raw_user_meta_data ->> 'cognome', ''),
+        NULLIF(TRIM(NEW.raw_user_meta_data ->> 'nome'), ''),
+        NULLIF(TRIM(NEW.raw_user_meta_data ->> 'cognome'), ''),
         NEW.email,
         NULLIF(NEW.raw_user_meta_data ->> 'eta', '')::integer,
         'attivo',
         'in_corso',
-        '{}'::jsonb
+        '{}'
     );
 
     RETURN NEW;
 END;
 $$;
+
+COMMENT ON FUNCTION public.crea_account_per_nuovo_utente() IS
+    'Crea la riga Account dopo l''inserimento di un utente in auth.users. Legge nome e cognome dai metadati eliminando spazi iniziali/finali e convertendo i valori vuoti in NULL; i vincoli dell''Account rifiutano quindi metadati mancanti o vuoti invece di creare nomi non validi. Imposta i valori iniziali previsti da D9: stato_account attivo, stato_onboarding in_corso e preferenze_notifiche serializzate come testo JSON vuoto.';
 
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
@@ -207,6 +223,9 @@ BEGIN
     RETURN NULL;
 END;
 $$;
+
+COMMENT ON FUNCTION public.verifica_integrita_amministratori_lega() IS
+    'Verifica, al termine della transazione, che ogni lega esistente abbia almeno un amministratore e che ogni amministratore sia anche membro della stessa lega. Controlla le leghe interessate dalle modifiche a lega, amministratore_lega e membro_lega. In base a D12, la rimozione manuale dell''ultimo amministratore è bloccata quando il relativo Giocatore esiste ancora; se invece l''Account viene cancellato a cascata per GDPR (DG4) e il Giocatore è già stato eliminato, lascia passare la rimozione dell''unico amministratore per non impedire la cancellazione dei dati personali. La gestione successiva della lega rimasta senza amministratori è demandata a CancellazioneAccountControl (KCK-204).';
 
 CREATE CONSTRAINT TRIGGER lega_amministratore_obbligatorio
 AFTER INSERT ON public.lega
