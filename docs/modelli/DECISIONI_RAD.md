@@ -33,3 +33,36 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Problema:** Il RAD prevede la Boundary Dashboard (tabella degli oggetti 3.4.4.1.1: "permette l'accesso alle proprie partite e alle partite pubbliche disponibili") ma non indica quale Control le fornisce l'elenco.
 * **Decisione:** Lo fornisce GestionePartitaControl con metodi di sola consultazione (le mie partite; partite pubbliche con posti liberi), usando PartitaRepository e PartecipazioneRepository. Le statistiche della Player Card vengono dal Control di RF_POS_2. Nessuna classe nuova; RAD invariato.
 * **Ticket coinvolti:** KCK-264, KCK-235, KCK-203, KCK-209
+
+---
+
+## D5 – Tempo limite per annullare una partita
+
+* **Problema:** RF_PAR_3 permette all'Organizzatore di annullare "entro un tempo limite prestabilito", ma il RAD non dice quanto vale ne' cosa succede oltre il limite.
+* **Decisione:** Il limite e' 24 ore prima dell'inizio della partita (Partita.dataOra). Oltre il limite il comando di annullamento non e' disponibile in DettaglioPartita e una richiesta di annullamento viene rifiutata con un messaggio di errore: la partita resta nel suo stato, non parte nessuna notifica e lo slot resta prenotato. Vale per le guardie [entro termine] dello statechart.
+* **Ticket coinvolti:** KCK-197, KCK-205; test frame TF_PAR_10, TF_PAR_11, TF_PAG_10, TF_PAG_12 (KCK-240)
+
+---
+
+## D6 – Chi possiede l'annullamento della partita
+
+* **Problema:** L'azione gestisciAnnullamento() dello statechart non ha una classe; le tabelle degli oggetti del RAD danno l'annullamento sia a GestionePartitaControl sia a GestioneTransazioniControl.
+* **Decisione:** gestisciAnnullamento() e' un metodo di GestionePartitaControl: porta la partita ad Annullata, fa liberare lo slot da PrenotazioneControl e chiede a GestioneTransazioniControl i rimborsi delle quote gia' versate (RF_PAG_3). Rispetta la dipendenza ammessa Partite -> Pagamenti di component.puml; non si aggiunge la dipendenza inversa. L'annullamento per scadenza del pagamento lo rileva il server (job o Edge Function, come in D1) e usa lo stesso flusso. Come arriva la notifica di cancellazione agli iscritti lo propone il piano di KCK-197, nel rispetto delle dipendenze di component.puml.
+* **Ticket coinvolti:** KCK-197, KCK-237, KCK-214
+
+---
+
+## D7 – Parametri non validi nella creazione della partita
+
+* **Problema:** UC_PAR_1 non ha un flusso di errore per parametri mancanti o non validi.
+* **Decisione:** Come in UC_ACC_1 E2 e UC_LEG_1 E1: il sistema mostra un messaggio di errore sul campo da correggere, non crea la partita e non verifica lo slot; l'utente resta su FormCreazionePartita. Sono non validi: un campo obbligatorio vuoto, data/ora nel passato, numero di partecipanti inferiore ai giocatori in campo della tipologia (es. meno di 10 per il 5vs5).
+* **Ticket coinvolti:** KCK-235, KCK-241; test frame TF_PAR_12 (KCK-240)
+
+---
+
+## D8 – Messaggi per RSVP a capienza raggiunta e quota gia' versata
+
+* **Problema:** Il RAD impedisce l'overbooking e il doppio versamento, ma non dice cosa vede il Giocatore.
+* **Decisione:** RSVP con partita al completo: la risposta non viene registrata e il Giocatore vede "Partita al completo". Quota gia' versata: in DettaglioPartita il comando di pagamento non e' disponibile e compare "Quota gia' versata"; nessun nuovo addebito.
+* **Ticket coinvolti:** KCK-248, KCK-254, KCK-214, KCK-220; test frame TF_PAR_06, TF_PAG_07 (KCK-240)
+
