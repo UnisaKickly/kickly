@@ -93,17 +93,21 @@ jobs:
     name: Build APK Android
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Il permesso di scrittura serve SOLO per creare la GitHub Release (ultimo
-    # passo); il resto del job non scrive nulla nel repository.
-    permissions:
-      contents: write
+    # Questo job compila codice e plugin di terze parti (pub, Gradle): resta con
+    # i permessi di sola lettura del workflow. La GitHub Release, che richiede
+    # la scrittura, la crea il job `release` qui sotto.
     # Stessi secret della build web: l'APK si collega al progetto Supabase.
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-      GH_TOKEN: ${{ github.token }}
+    # Il tag della Release viene calcolato qui (serve il pubspec.yaml).
+    outputs:
+      tag: ${{ steps.versione.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Il token non resta salvato in .git/config durante la build.
+          persist-credentials: false
 
       # Gradle (il sistema di build Android) richiede Java.
       - uses: actions/setup-java@v6
@@ -138,18 +142,40 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-      # GitHub Release (marcata "pre-release": l'APK e' firmato con la chiave
-      # di debug) con l'APK allegato. Il tag e' <versione del pubspec>-build.<n>,
-      # es. v0.1.0-build.7. Se fallisce (es. regole sui tag) NON deve far
-      # fallire la CD: l'APK e' gia' disponibile tra gli Artifacts.
-      - name: Crea la GitHub Release con l'APK
-        continue-on-error: true
+      # Tag della Release: <versione del pubspec>-build.<n>, es. v0.1.0-build.7.
+      - name: Calcola il tag della Release
+        id: versione
         run: |
           version=$(grep '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//; s/\+.*//')
-          tag="v${version}-build.${{ github.run_number }}"
-          cp build/app/outputs/flutter-apk/app-release.apk "kickly-${tag}.apk"
-          gh release create "$tag" "kickly-${tag}.apk" \
+          echo "tag=v${version}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  # GitHub Release (marcata "pre-release": l'APK e' firmato con la chiave di
+  # debug) con l'APK allegato. E' un job separato perche' e' l'UNICO che ha
+  # bisogno del permesso di scrittura: cosi' il token con `contents: write` non
+  # e' mai visibile al codice di terze parti che gira durante la build.
+  # Non fa checkout del codice: scarica solo l'APK gia' compilato.
+  # Se fallisce (es. regole sui tag) NON fa fallire la CD
+  # (`continue-on-error`): l'APK e' gia' disponibile tra gli Artifacts.
+  release:
+    name: GitHub Release con l'APK
+    needs: build-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: write # creare tag e Release
+      actions: read # scaricare l'artifact del run
+    steps:
+      - name: Crea la GitHub Release con l'APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build-android.outputs.tag }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name kickly-apk --dir apk
+          mv apk/app-release.apk "kickly-${TAG}.apk"
+          gh release create "$TAG" "kickly-${TAG}.apk" \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "Kickly ${tag}" \
+            --title "Kickly ${TAG}" \
             --notes "Build automatica della CD dal commit ${GITHUB_SHA}. APK firmato con la chiave di debug: solo per i test del team."
