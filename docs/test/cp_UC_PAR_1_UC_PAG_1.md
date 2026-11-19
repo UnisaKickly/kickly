@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Caso d'uso** | `docs/rad/uc/UC_PAR_1_CreazionePartita.md`, `docs/rad/uc/UC_PAG_1_PagamentoQuota.md` |
-| **Requisiti** | RF_PAR_1, RF_PAR_2, RF_PAR_3, RF_PAG_1, RF_PAG_2, RF_PAG_3, RF_PAG_4; RNF_A_2, RNF_A_3, RNF_PRE_3; SDD DG_5, DG_10 |
+| **Requisiti** | RF_PAR_1, RF_PAR_2, RF_PAR_3, RF_PAG_1, RF_PAG_2, RF_PAG_3, RF_PAG_4; RNF_A_2, RNF_A_3, RNF_PRE_3; SDD DG3, DG2 |
 | **Metodo testato** | Creazione: `GestionePartitaControl.richiediRiepilogo`, `GestionePartitaControl.finalizzaCreazione`, `PrenotazioneControl.verificaSlot`, `PrenotazioneControl.prenotaSlot` (SD_UC_PAR_1). RSVP: `GestionePartecipazioneControl` (metodo non ancora nei modelli). Annullamento: `GestionePartitaControl.gestisciAnnullamento` (azione di SCD_PAR_StatoPartita, classe decisa in DECISIONI_RAD D6). Pagamento: `GestioneTransazioniControl.richiediRiepilogo`, `GestioneTransazioniControl.avviaPagamento` (SD_UC_PAG_1) |
 | **Autori** | Simona Sceral |
 | **Revisori** | Mario Celzo, Renato Mancino |
@@ -11,7 +11,7 @@
 Fonti degli esiti attesi: i due casi d'uso, RAD v2.9 §3.2 (RF_PAR_2, RF_PAR_3,
 RF_PAG_1..4) e §3.3 (RNF), scenari SC_PAR_2 e SC_PAG_2 (RAD §3.4.1),
 `docs/modelli/statechart_partita.puml`, `docs/modelli/DECISIONI_RAD.md` (D3, D5-D8) e
-SDD v1.0 §1.2 (DG_5 overbooking, DG_10 robustezza transazionale). Dove il RAD non
+SDD v1.4 §1.2 (DG3 affidabilita' dell'RSVP, DG2 integrita' delle transazioni di pagamento). Dove il RAD non
 dice l'esito, l'esito viene dalle decisioni dei PM D5-D8 (risposte alle domande
 della sezione 4): nessun esito e' stato ipotizzato.
 
@@ -24,7 +24,7 @@ della sezione 4): nessun esito e' stato ipotizzato.
 | Connessione alla conferma | raggiungibilita' del server alla conferma della creazione (UC_PAR_1 E1) |
 | Posti disponibili | posti ancora liberi della partita al momento dell'RSVP (RF_PAR_2) |
 | Risposta del giocatore | risposta RSVP gia' data o no dallo stesso giocatore (Partecipazione univoca) |
-| Richieste concorrenti | numero di RSVP che arrivano insieme sull'ultimo posto (DG_5, RNF_A_2) |
+| Richieste concorrenti | numero di RSVP che arrivano insieme sull'ultimo posto (DG3, RNF_A_2) |
 | Stato partita | Aperta, Completa, Confermata (statechart) |
 | Tempo dell'annullamento | entro o oltre il tempo limite prestabilito (RF_PAR_3) |
 | Stato quota | `Quota.statoVersamento`: non versata o versata |
@@ -32,7 +32,7 @@ della sezione 4): nessun esito e' stato ipotizzato.
 | Quote mancanti | la quota versata e' l'ultima mancante o no (UC_PAG_1 passo 7, A2) |
 | Scelta al riepilogo | il Giocatore conferma o chiude il riepilogo (UC_PAG_1 passo 3, A1) |
 | Esito del fornitore | positivo, negativo, non pervenuto (UC_PAG_1 passi 5-6, E1, E2) |
-| Nuovo tentativo | il Giocatore ripete il pagamento dopo un esito non pervenuto (DG_10) |
+| Nuovo tentativo | il Giocatore ripete il pagamento dopo un esito non pervenuto (DG2) |
 | Account del Gestore | account presso il fornitore collegato o no (DECISIONI_RAD D3) |
 
 ## 2. Categorie e scelte
@@ -162,14 +162,14 @@ implementa il Control corrispondente.
 | TF_PAR_03 | parametri validi, slot libero, server non raggiungibile | Connessione interrotta prima della conferma | Il sistema notifica l'errore invitando a riprovare; la partita non viene creata e l'utente resta sulla schermata di creazione | E1 (al passo 4), exit condition on failure |
 | TF_PAR_12 | parametri non validi o mancanti | Giocatore nella schermata di creazione; un campo obbligatorio vuoto, oppure data/ora nel passato, oppure numero di partecipanti inferiore ai giocatori in campo della tipologia (es. meno di 10 per il 5vs5) | Il sistema mostra un messaggio di errore sul campo da correggere; la partita non viene creata, la disponibilita' dello slot non viene verificata e l'utente resta sul modulo di creazione | DECISIONI_RAD D7, exit condition on failure |
 
-### 3.2 Conferma o ritiro presenza (RF_PAR_2, SC_PAR_2, DG_5)
+### 3.2 Conferma o ritiro presenza (RF_PAR_2, SC_PAR_2, DG3)
 
 | Id | Scelte combinate | Preparazione | Esito atteso | Flusso del caso d'uso |
 |---|---|---|---|---|
 | TF_PAR_04 | piu' posti liberi, nessuna risposta precedente, un RSVP | Partita "Aperta" con almeno 2 posti liberi | La risposta e' registrata, il contatore dei posti disponibili scende di 1 e il Giocatore compare tra i presenti confermati | RF_PAR_2, SC_PAR_2 |
 | TF_PAR_05 | ultimo posto, un RSVP | Partita "Aperta" con 1 posto libero | La risposta e' registrata, il contatore va a 0 e la partita passa a "Completa" | RF_PAR_2, statechart (Aperta -> Completa) |
-| TF_PAR_06 | nessun posto libero, conferma presenza | Partita "Completa" | La risposta non e' registrata e il contatore resta invariato: nessun overbooking. Il Giocatore vede il messaggio "Partita al completo" | SC_PAR_2 (verifica dei posti), DG_5, RNF_A_2, DECISIONI_RAD D8 |
-| TF_PAR_07 | ultimo posto, due RSVP simultanei | Partita "Aperta" con 1 posto libero; due Giocatori confermano nello stesso istante | Viene registrata una sola delle due conferme; il contatore non va sotto 0 e i partecipanti non superano il numero richiesto | DG_5, RNF_A_2 |
+| TF_PAR_06 | nessun posto libero, conferma presenza | Partita "Completa" | La risposta non e' registrata e il contatore resta invariato: nessun overbooking. Il Giocatore vede il messaggio "Partita al completo" | SC_PAR_2 (verifica dei posti), DG3, RNF_A_2, DECISIONI_RAD D8 |
+| TF_PAR_07 | ultimo posto, due RSVP simultanei | Partita "Aperta" con 1 posto libero; due Giocatori confermano nello stesso istante | Viene registrata una sola delle due conferme; il contatore non va sotto 0 e i partecipanti non superano il numero richiesto | DG3, RNF_A_2 |
 | TF_PAR_08 | presenza gia' confermata | Il Giocatore ha gia' una Partecipazione confermata per la partita | Nessuna seconda Partecipazione e contatore invariato (associazione univoca Giocatore-Partita) | Tabella degli oggetti (Partecipazione), RF_PAR_2 |
 | TF_PAR_09 | nessun posto libero, ritiro presenza | Partita "Completa", il Giocatore e' tra i confermati | Il posto si libera, il contatore sale di 1 e la partita torna "Aperta" | RF_PAR_2, statechart (Completa -> Aperta) |
 
@@ -190,8 +190,8 @@ implementa il Control corrispondente.
 | TF_PAG_04 | termine scaduto | Termine di versamento passato | Il comando di pagamento non e' disponibile e il sistema segnala che la partita e' stata annullata | A3 (al passo 1), RF_PAG_3 |
 | TF_PAG_05 | conferma, esito negativo | Il fornitore rifiuta il pagamento | Il sistema segnala il mancato addebito; la quota resta non versata e si puo' riprovare entro il termine (si riprende dal passo 1) | E1 (al passo 5) |
 | TF_PAG_06 | conferma, esito non pervenuto | La comunicazione con il fornitore si interrompe prima dell'esito | La quota resta non versata, nessun addebito registrato; il sistema invita il Giocatore a verificare prima di ripetere l'operazione | E2 (al passo 6), RNF_A_3 |
-| TF_PAG_07 | quota gia' versata | Il Giocatore ha gia' versato la quota e riapre il pagamento | Nessun nuovo addebito (DG_10): il comando di pagamento non e' disponibile e la pagina della partita mostra "Quota gia' versata" | Entry condition UC_PAG_1, DG_10, DECISIONI_RAD D8 |
-| TF_PAG_08 | esito non pervenuto, poi nuovo tentativo | Dopo TF_PAG_06 il fornitore aveva in realta' addebitato; il Giocatore ripete il pagamento | La quota risulta addebitata una sola volta (richiesta con riferimento idempotente) e passa a "versata" solo con l'esito positivo confermato | DG_10, RNF_A_3 |
+| TF_PAG_07 | quota gia' versata | Il Giocatore ha gia' versato la quota e riapre il pagamento | Nessun nuovo addebito (DG2): il comando di pagamento non e' disponibile e la pagina della partita mostra "Quota gia' versata" | Entry condition UC_PAG_1, DG2, DECISIONI_RAD D8 |
+| TF_PAG_08 | esito non pervenuto, poi nuovo tentativo | Dopo TF_PAG_06 il fornitore aveva in realta' addebitato; il Giocatore ripete il pagamento | La quota risulta addebitata una sola volta (richiesta con riferimento idempotente) e passa a "versata" solo con l'esito positivo confermato | DG2, RNF_A_3 |
 
 ### 3.5 Rimborsi (RF_PAG_3, SC_PAG_2)
 
@@ -222,6 +222,6 @@ Risposte dei PM (Renato Mancino, 19/11/2026). Le decisioni sono registrate in
 1. Parametri non validi in UC_PAR_1 (data passata, numero di partecipanti incoerente con la tipologia, campi vuoti). **Risposta:** messaggio di errore sul campo e si resta sul modulo, come in UC_ACC_1 E2 e UC_LEG_1 E1. Frame TF_PAR_12 (DECISIONI_RAD D7).
 2. "Tempo limite prestabilito" di RF_PAR_3. **Risposta:** 24 ore prima dell'inizio della partita. Oltre, il comando di annullamento non e' disponibile e la richiesta viene rifiutata; la partita resta invariata. Frame TF_PAR_11 (D5).
 3. Messaggi per quota gia' versata (TF_PAG_07) e RSVP a capienza raggiunta (TF_PAR_06). **Risposta:** "Quota gia' versata" con comando di pagamento non disponibile; "Partita al completo" senza registrare la risposta (D8).
-4. DG citati nel ticket. **Risposta:** confermati DG_10 (Robustezza, rank 2, RNF_A_3) e DG_5 (Affidabilita', rank 3, RNF_A_2): il ticket indicava il rank, non il numero del DG.
+4. DG citati nel ticket. **Risposta:** confermati DG2 (Integrita' delle transazioni di pagamento, RNF_A_3) e DG3 (Affidabilita' dell'RSVP, RNF_A_2), cioe' i rank dell'SDD v1.4. Nel PDF v1.0 erano DG2 e DG3; dal 19/11 si usa il rank.
 5. Proprietario di `gestisciAnnullamento()`. **Risposta:** `GestionePartitaControl` (D6). Il metodo di RSVP di `GestionePartecipazioneControl` resta da proporre nel piano del ticket che lo implementa (KCK-248).
 6. RNF_PRE_3 (rimborso entro 5 giorni lavorativi nel 90% dei casi). **Risposta:** giusto lasciarlo fuori dagli esiti dei frame: e' una soglia statistica e si verifica con una misura a parte, non con un test unitario. I frame di rimborso verificano che il rimborso venga disposto.

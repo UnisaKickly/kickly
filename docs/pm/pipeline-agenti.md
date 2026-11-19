@@ -62,7 +62,7 @@ servono solo per segnalare bug (modulo **Bug**).
 | `.github/pull_request_template.md`, `.github/CODEOWNERS` | Tracciabilita' nella PR e approvazioni obbligatorie |
 | `.github/ISSUE_TEMPLATE/bug.yml`, `config.yml` | Modulo per le segnalazioni di bug |
 | `scripts/tracciabilita.sh` | Tabella test frame -> test (anche nel riepilogo della CI) |
-| `docs/fonti/` | RAD v2.9 e SDD v1.0 originali, da cui si ricavano i file di testo in `docs/` |
+| `docs/fonti/` | RAD v2.9 e SDD v1.4 (e v1.0 come storico), da cui si ricavano i file di testo in `docs/` |
 | `docs/modelli/class_diagram_sdd.md` | Class diagram dell'SDD in testo, con la mappatura sul database |
 
 ## 3. Lista di controllo del repository (PM)
