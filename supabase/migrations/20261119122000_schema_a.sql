@@ -4,7 +4,7 @@ CREATE TABLE public.account (
     nome text NOT NULL,
     cognome text NOT NULL,
     email text NOT NULL UNIQUE,
-    eta integer,
+    eta integer NOT NULL,
     stato_account text NOT NULL DEFAULT 'attivo',
     stato_onboarding text NOT NULL DEFAULT 'in_corso',
     preferenze_notifiche text NOT NULL DEFAULT '{}',
@@ -18,21 +18,30 @@ CREATE TABLE public.account (
     CONSTRAINT account_cognome_non_vuoto_check
         CHECK (length(btrim(cognome)) > 0),
     CONSTRAINT account_eta_check
-        CHECK (eta IS NULL OR (eta >= 14 AND eta <= 120)),
+        CHECK (eta >= 14 AND eta <= 120),
     CONSTRAINT account_stato_account_check
         CHECK (stato_account IN ('attivo', 'in_cancellazione')),
     CONSTRAINT account_stato_onboarding_check
         CHECK (stato_onboarding IN ('in_corso', 'completato'))
 );
 
+COMMENT ON COLUMN public.account.email IS
+    'Copia dell''email di auth.users, scritta dal trigger alla registrazione. Se l''utente cambia email in Supabase Auth questa colonna non si aggiorna da sola: va riallineata dal Control che gestisce il cambio.';
+COMMENT ON CONSTRAINT account_eta_check ON public.account IS
+    'Eta'' obbligatoria in registrazione (UC_ACC_1 passo 2) e di almeno 14 anni, eta'' minima in Italia per il consenso ai servizi online (GDPR art. 8): decisione D20.';
+
 COMMENT ON CONSTRAINT account_auth_user_id_fkey ON public.account IS
     'ON DELETE CASCADE elimina i dati personali dell''Account quando viene cancellato l''utente Auth, in conformità al DG4.';
 
 -- La coerenza tra ruolo e specializzazione è garantita dal Control di registrazione e dalle policy RLS, come deciso in D11.
+-- ruolo_preferito_in_campo e piede_dominante sono facoltativi: nel sequence SD_UC_ACC_1
+-- la riga del Giocatore nasce alla scelta del ruolo (Giocatore.create(), passo 7) e la
+-- Player Card si salva dopo (aggiornaDati(), passo 9); se l'onboarding si interrompe
+-- prima (UC_ACC_1 E3) la riga resta senza Player Card fino alla ripresa.
 CREATE TABLE public.giocatore (
     account_id uuid NOT NULL,
-    ruolo_preferito_in_campo text NOT NULL,
-    piede_dominante text NOT NULL,
+    ruolo_preferito_in_campo text,
+    piede_dominante text,
     CONSTRAINT giocatore_pkey PRIMARY KEY (account_id),
     CONSTRAINT giocatore_account_id_fkey
         FOREIGN KEY (account_id) REFERENCES public.account (id) ON DELETE CASCADE
@@ -76,6 +85,8 @@ CREATE TABLE public.lega (
     codice_invito text UNIQUE,
     scadenza_codice_invito timestamptz,
     CONSTRAINT lega_pkey PRIMARY KEY (id),
+    CONSTRAINT lega_nome_non_vuoto_check
+        CHECK (length(btrim(nome)) > 0),
     CONSTRAINT lega_tipologia_match_check
         CHECK (tipologia_match IN ('5v5', '6v6', '7v7', '8v8', '9v9', '10v10', '11v11')),
     CONSTRAINT lega_privacy_check
@@ -86,6 +97,14 @@ CREATE TABLE public.lega (
             OR (codice_invito IS NOT NULL AND scadenza_codice_invito IS NOT NULL)
         )
 );
+
+-- Il nome della lega e' unico senza distinguere maiuscole e spazi iniziali/finali
+-- (UC_LEG_1 E1 "nome lega gia' in uso", decisione D21). Garantirlo nel database evita
+-- duplicati quando due Giocatori creano insieme una lega con lo stesso nome.
+CREATE UNIQUE INDEX lega_nome_unico_idx ON public.lega (lower(btrim(nome)));
+
+COMMENT ON COLUMN public.lega.tipologia_match IS
+    'Valori nel formato 5v5 ... 11v11; i casi d''uso e i test frame scrivono 5vs5: la conversione la fa il codice Dart.';
 
 CREATE TABLE public.membro_lega (
     lega_id uuid NOT NULL,
@@ -225,7 +244,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.verifica_integrita_amministratori_lega() IS
-    'Verifica, al termine della transazione, che ogni lega esistente abbia almeno un amministratore e che ogni amministratore sia anche membro della stessa lega. Controlla le leghe interessate dalle modifiche a lega, amministratore_lega e membro_lega. In base a D12, la rimozione manuale dell''ultimo amministratore è bloccata quando il relativo Giocatore esiste ancora; se invece l''Account viene cancellato a cascata per GDPR (DG4) e il Giocatore è già stato eliminato, lascia passare la rimozione dell''unico amministratore per non impedire la cancellazione dei dati personali. La gestione successiva della lega rimasta senza amministratori è demandata a CancellazioneAccountControl (KCK-204).';
+    'Verifica, al termine della transazione, che ogni lega esistente abbia almeno un amministratore e che ogni amministratore sia anche membro della stessa lega. Controlla le leghe interessate dalle modifiche a lega, amministratore_lega e membro_lega. In base a D12, la rimozione manuale dell''ultimo amministratore è bloccata quando il relativo Giocatore esiste ancora; se invece l''Account viene cancellato a cascata per GDPR (DG4) e il Giocatore è già stato eliminato, lascia passare la rimozione dell''unico amministratore per non impedire la cancellazione dei dati personali. La lega rimasta senza amministratori la sistema CancellazioneAccountControl (KCK-204) secondo D19: diventa amministratore il membro con piu'' presenze confermate nella lega (a parita'' ordine alfabetico), oppure la lega viene cancellata se non ha altri membri.';
 
 CREATE CONSTRAINT TRIGGER lega_amministratore_obbligatorio
 AFTER INSERT ON public.lega

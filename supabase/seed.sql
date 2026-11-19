@@ -78,7 +78,7 @@ VALUES
         extensions.crypt('KicklyTest2026!', extensions.gen_salt('bf')),
         now(),
         '{"provider":"email","providers":["email"]}'::jsonb,
-        '{"nome":"Paolo","cognome":"Ferri"}'::jsonb,
+        '{"nome":"Paolo","cognome":"Ferri","eta":"45"}'::jsonb,
         now(),
         now(),
         '',
