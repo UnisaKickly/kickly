@@ -225,7 +225,8 @@ Come funziona, in pratica:
    merge": lo squash creerebbe su `main` un commit diverso da quelli di
    `develop` e i due branch divergerebbero a ogni rilascio.
 4. Dopo il merge parte la **CD**: app web su
-   https://unisakickly.github.io/kickly/ e APK tra gli *Artifacts* del run.
+   https://unisakickly.github.io/kickly/ e APK tra gli *Artifacts* del run
+   (e nelle *Releases* del repository, dove non scade).
 
 Cosa significa per te: **entra nel rilascio del mercoledi' solo cio' che e'
 mergiato in `develop` entro martedi' sera.** Se vuoi che la tua funzionalita'

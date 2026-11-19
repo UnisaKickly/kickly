@@ -19,11 +19,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      # Stessa versione di Flutter della CI, cosi' l'agente puo' eseguire
+      # Stessa versione di Flutter della CI (e' scritta in un solo posto:
+      # .github/actions/setup-flutter), cosi' l'agente puo' eseguire
       # dart format, flutter analyze e flutter test come il team.
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.47.0"
-          channel: stable
-          cache: true
-      - run: flutter pub get
+      - uses: ./.github/actions/setup-flutter

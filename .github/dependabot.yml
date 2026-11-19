@@ -1,0 +1,29 @@
+# =============================================================================
+# Dependabot - aggiornamenti automatici
+# =============================================================================
+# Una volta a settimana Dependabot apre PR (branch `dependabot/...`, ammessi
+# dal controllo "Nome del branch" della CI) per:
+#   - le action di GitHub usate nei workflow (comprese quelle fissate a SHA);
+#   - le dipendenze Dart/Flutter di pubspec.yaml.
+#
+# Nulla entra da solo: ogni PR richiede la CI verde e l'approvazione di un PM
+# (CODEOWNERS), come tutte le altre. Il limite di PR aperte tiene la coda corta.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore"
+
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore"
