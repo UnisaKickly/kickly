@@ -8,14 +8,14 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 
 * **Problema:** Il RAD dice che "il sistema rileva la conclusione del match" ma nessun RF la descrive.
 * **Decisione:** La partita passa a Conclusa da sola quando l'ora di fine e' passata (job pianificato su Supabase, ad es. pg_cron, oppure controllo a lettura nel Control; la scelta viene fatta nel piano del ticket che implementa, non in questo file). Al passaggio si apre la VotazioneMVP e si crea la Notifica di apertura sondaggio. Nessuna nuova schermata e nessuno stato nuovo: usa solo gli stati dello statechart.
-* **Ticket coinvolti:** da verificare con i PM (UC_MVP_1)
+* **Ticket coinvolti:** KCK-259 (RF_POS_1, Control del voto MVP), KCK-200 (RF_POS_1, schermate); caso d'uso UC_MVP_1
 
 ---
 
 ## D2 – Inserimento di gol e assist
 
 * **Problema:** Nessun RF dice come si inseriscono gol e assist (campi di Partecipazione).
-* **Decisione:** L'Organizzatore li inserisce per ogni partecipante in DettaglioPartita, solo a partita Conclusa; si implementa in RF_POS_2. Se questo ticket non viene fatto, classifica e dashboard mostrano gol e assist a 0: e' un comportamento accettato. Non creare nuove entity.
+* **Decisione:** L'Organizzatore li inserisce per ogni partecipante in DettaglioPartita, solo a partita Conclusa; si implementa in RF_POS_2. Se l'inserimento previsto in RF_POS_2 non viene fatto, classifica e dashboard mostrano gol e assist a 0: e' un comportamento accettato. Non creare nuove entity.
 * **Ticket coinvolti:** KCK-209, KCK-217
 
 ---
