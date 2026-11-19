@@ -55,7 +55,10 @@ servono solo per segnalare bug (modulo **Bug**).
 | `AGENTS.md`, `CLAUDE.md` | Istruzioni comuni: stack, comandi, regole sempre / chiedi prima / mai, quando un task e' finito |
 | `.claude/agents/tester.md`, `revisore.md` | Ruoli in contesto separato (tester e revisore): agenti in Claude Code; con Codex, Copilot o altre IA si usa il contenuto del file come prima istruzione di una sessione nuova |
 | `.github/workflows/copilot-setup-steps.yml` | Ambiente per il Copilot coding agent |
-| `.github/workflows/ci.yml` | Nome del branch, DG9, avvisi su test e dipendenze modificati, tracciabilita' dei test frame, format/analyze/test, build web |
+| `.github/workflows/ci.yml` | Nome del branch, DG9, avvisi su test e dipendenze modificati, tracciabilita' dei test frame, format/analyze/test, build web; su push anche build Android (debug) e, se cambia `supabase/`, test del database e delle Edge Functions |
+| `.github/workflows/cd.yml`, `release.yml` | Rilascio: Pages, APK (Artifacts e GitHub Release), PR settimanale `develop` -> `main` |
+| `.github/actions/setup-flutter/action.yml` | Azione composita: versione di Flutter fissata in un solo punto, usata da CI, CD e Copilot |
+| `.github/dependabot.yml` | Aggiornamenti settimanali di action e dipendenze Dart (PR da approvare come le altre) |
 | `.github/pull_request_template.md`, `.github/CODEOWNERS` | Tracciabilita' nella PR e approvazioni obbligatorie |
 | `.github/ISSUE_TEMPLATE/bug.yml`, `config.yml` | Modulo per le segnalazioni di bug |
 | `scripts/tracciabilita.sh` | Tabella test frame -> test (anche nel riepilogo della CI) |
@@ -83,6 +86,8 @@ servono solo per segnalare bug (modulo **Bug**).
 
 **Rilascio**
 - [x] Settings -> Pages -> Source = **GitHub Actions** (sito su GitHub Pages)
+- [ ] Settings -> Secrets and variables -> Actions -> **Secrets**: `SUPABASE_URL` e `SUPABASE_ANON_KEY` (stessi valori del `config.json`; **mai** la `service_role`). Senza, la CD pubblica un'app che mostra "Configurazione mancante"
+- [ ] (Facoltativo) aggiungere ai check obbligatori "Build Android (debug)" e "Supabase e Edge Functions" dopo che hanno girato qualche volta senza problemi
 
 ## 4. Problemi tipici
 
