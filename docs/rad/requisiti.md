@@ -14,7 +14,7 @@
 
 | Data | Versione | Descrizione | Autori |
 |---|---|---|---|
-| 19/11/2026 | 0.1 | Prima stesura dei requisiti RAD v2.9 | <Nomi> |
+| 19/11/2026 | 0.1 | Prima stesura dei requisiti RAD v2.9 | Gabriele Karol Vicinanza |
 
 ## Indice
 
