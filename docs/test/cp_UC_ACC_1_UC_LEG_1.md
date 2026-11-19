@@ -19,9 +19,9 @@ funzione**: le categorie di funzioni diverse non si combinano. Una scelta
 Fonti degli esiti attesi: i casi d'uso UC_ACC_1 e UC_LEG_1, RAD v2.9 §3.2
 (RF_ACC_1..4, RF_LEG_1..4), la tabella degli oggetti (§3.4.4.1.1 e
 §3.4.4.1.2), il sequence SD_UC_ACC_1 (`docs/modelli/seq_primo_accesso.puml`) e
-`docs/modelli/DECISIONI_RAD.md` (D9, D11). Dove nessuna fonte dice l'esito, il
-frame e' marcato **DA CONFERMARE** e rimanda a una domanda della sezione 4:
-l'esito non e' stato ipotizzato.
+`docs/modelli/DECISIONI_RAD.md` (D9, D11, D13, D16, D17). Dove il RAD non dice
+l'esito, l'esito viene dalle decisioni dei PM (risposte alle domande della
+sezione 4): nessun esito e' stato ipotizzato.
 
 Fuori dai frame: RNF_U_1 (DG6, onboarding in meno di 3 minuti) e RNF_U_2 (DG7,
 adesione a una lega in al massimo 3 interazioni) sono soglie di usabilita': non
@@ -193,7 +193,7 @@ implementa il Control corrispondente.
 |---|---|---|---|---|
 | TF_ACC_05 | Giocatore, Player Card inserita, completato | Account appena creato, onboarding avviato | Il ruolo Giocatore e' registrato come definitivo; la Player Card e' salvata; il sistema mostra la dashboard con le statistiche iniziali azzerate; statoOnboarding `completato` | UC_ACC_1 passi 6-9, RF_ACC_2, D9, D11 |
 | TF_ACC_06 | Gestore del Campo, Player Card non prevista, completato | Account appena creato, onboarding avviato | Il ruolo Gestore del Campo e' registrato come definitivo e l'utente e' reindirizzato alla configurazione della propria struttura sportiva, al posto dei passi 7-9 | UC_ACC_1 A1, RF_ACC_1, D11 |
-| TF_ACC_07 | Player Card con ruolo in campo o piede dominante mancante | Giocatore nella configurazione della Player Card | **DA CONFERMARE** (domanda 1): il RAD non dice cosa succede se si conferma la Player Card incompleta | UC_ACC_1 passo 8 |
+| TF_ACC_07 | Player Card con ruolo in campo o piede dominante mancante | Giocatore nella configurazione della Player Card | Come E2: il sistema mostra l'errore sul campo mancante, si resta sulla configurazione e la Player Card non viene salvata | UC_ACC_1 passo 8, D16 |
 | TF_ACC_08 | onboarding interrotto prima della scelta del ruolo | L'utente esce dopo la creazione dell'account senza scegliere il ruolo | L'account resta con onboarding incompleto (statoOnboarding `in_corso`); al successivo accesso il sistema ripropone la scelta del ruolo | UC_ACC_1 E3, exit condition on failure, D9 |
 | TF_ACC_09 | onboarding interrotto prima del salvataggio della Player Card | Giocatore che esce dalla configurazione della Player Card senza confermare | L'onboarding resta incompleto; al successivo accesso il sistema ripropone la configurazione della Player Card | UC_ACC_1 E3, exit condition on failure, D9 |
 
@@ -202,9 +202,9 @@ implementa il Control corrispondente.
 | Id | Scelte combinate | Preparazione | Esito atteso | Flusso del caso d'uso |
 |---|---|---|---|---|
 | TF_ACC_10 | email registrata, password corretta, campi inseriti | Account registrato con onboarding completato | L'utente accede al proprio account e il sistema mostra la Dashboard | RF_ACC_3, tabella degli oggetti (`FormLogin`, `Dashboard`) |
-| TF_ACC_11 | email non registrata | Nessun account con l'email inserita | L'utente non viene autenticato. Messaggio mostrato: **DA CONFERMARE** (domanda 2) | RF_ACC_3 |
-| TF_ACC_12 | password errata | Account registrato, password sbagliata | L'utente non viene autenticato. Messaggio mostrato: **DA CONFERMARE** (domanda 2) | RF_ACC_3 |
-| TF_ACC_13 | email o password vuota | Modulo di login incompleto | L'utente non viene autenticato. Messaggio mostrato: **DA CONFERMARE** (domanda 2) | RF_ACC_3 |
+| TF_ACC_11 | email non registrata | Nessun account con l'email inserita | L'utente non viene autenticato e resta su FormLogin; messaggio generico "Email o password non corretti" | RF_ACC_3, D16 |
+| TF_ACC_12 | password errata | Account registrato, password sbagliata | L'utente non viene autenticato e resta su FormLogin; stesso messaggio generico "Email o password non corretti" | RF_ACC_3, D16 |
+| TF_ACC_13 | email o password vuota | Modulo di login incompleto | L'utente non viene autenticato e resta su FormLogin; errore sul campo vuoto | RF_ACC_3, D16 |
 
 ### 3.4 F4 Logout (RF_ACC_3)
 
@@ -217,9 +217,9 @@ implementa il Control corrispondente.
 | Id | Scelte combinate | Preparazione | Esito atteso | Flusso del caso d'uso |
 |---|---|---|---|---|
 | TF_ACC_15 | email associata, collegamento valido, nuova password conforme | Account registrato che ha dimenticato la password | Il sistema invia l'email di verifica tramite `ServizioEmail`; dopo la verifica la nuova password e' impostata e l'utente accede con quella | RF_ACC_4, tabella degli oggetti (`RecuperoPasswordControl`, `ServizioEmail`) |
-| TF_ACC_16 | email non associata ad alcun account | Nessun account con l'email inserita | **DA CONFERMARE** (domanda 3) | RF_ACC_4 |
-| TF_ACC_17 | collegamento scaduto o non valido | Collegamento di verifica gia' usato o scaduto | La password non viene cambiata. Cosa vede l'utente: **DA CONFERMARE** (domanda 4) | RF_ACC_4 |
-| TF_ACC_18 | nuova password debole | Collegamento valido, nuova password debole | La password non viene cambiata. Messaggio mostrato: **DA CONFERMARE** (domanda 5) | RF_ACC_4 |
+| TF_ACC_16 | email non associata ad alcun account | Nessun account con l'email inserita | Il sistema mostra lo stesso messaggio del caso valido ("Se l'email e' registrata riceverai un messaggio") e non invia alcuna email | RF_ACC_4, D16 |
+| TF_ACC_17 | collegamento scaduto o non valido | Collegamento di verifica gia' usato o scaduto | La password non viene cambiata; il sistema mostra "Collegamento scaduto o non valido" e invita a ripetere la richiesta di recupero | RF_ACC_4, D16 |
+| TF_ACC_18 | nuova password debole | Collegamento valido, nuova password debole | La password non viene cambiata; come UC_ACC_1 E2 il sistema mostra l'errore specifico e si resta sul modulo | RF_ACC_4, UC_ACC_1 E2, D16 |
 
 ### 3.6 F6 Creazione lega (UC_LEG_1, RF_LEG_1)
 
@@ -236,8 +236,8 @@ implementa il Control corrispondente.
 | Id | Scelte combinate | Preparazione | Esito atteso | Flusso del caso d'uso |
 |---|---|---|---|---|
 | TF_LEG_06 | amministratore, dati validi | Amministratore che modifica nome, tipologia o privacy in `FormLega` | I dettagli della lega sono aggiornati e la dashboard mostra i nuovi dati | RF_LEG_1, tabella degli oggetti (`FormLega`) |
-| TF_LEG_07 | membro non amministratore | Membro ordinario della lega | **DA CONFERMARE** (domanda 6): la modifica e' riservata all'amministratore, ma il RAD non dice cosa vede il membro | RF_LEG_1 |
-| TF_LEG_08 | nome gia' in uso da un'altra lega | Amministratore che rinomina la lega con il nome di un'altra | **DA CONFERMARE** (domanda 7): E1 di UC_LEG_1 vale per la creazione; per la modifica il RAD non lo dice | RF_LEG_1 |
+| TF_LEG_07 | membro non amministratore | Membro ordinario della lega | Il comando di modifica non e' visibile al membro; una richiesta diretta viene rifiutata con un messaggio di errore e la lega resta invariata | RF_LEG_1, D13 |
+| TF_LEG_08 | nome gia' in uso da un'altra lega | Amministratore che rinomina la lega con il nome di un'altra | Come E1: il sistema mostra un messaggio di errore ed evidenzia il nome da correggere; si resta su `FormLega` e la lega resta invariata | RF_LEG_1, UC_LEG_1 E1, D17 |
 
 ### 3.8 F8 Generazione e condivisione dell'invito (UC_LEG_1, RF_LEG_2)
 
@@ -245,7 +245,7 @@ implementa il Control corrispondente.
 |---|---|---|---|---|
 | TF_LEG_09 | amministratore, codice d'invito | Lega appena creata | Selezionando "Condividi Invito" l'amministratore invia il codice univoco generato a un altro Giocatore | UC_LEG_1 passi 4-5, RF_LEG_2 |
 | TF_LEG_10 | amministratore, link d'invito | Lega esistente | L'amministratore genera e condivide il link d'invito della lega | RF_LEG_2 |
-| TF_LEG_11 | membro non amministratore | Membro ordinario della lega | **DA CONFERMARE** (domanda 6): generare e condividere l'invito e' dell'amministratore (RF_LEG_2), ma il RAD non dice cosa vede il membro | RF_LEG_2 |
+| TF_LEG_11 | membro non amministratore | Membro ordinario della lega | Il comando "Condividi Invito" non e' visibile al membro; una richiesta diretta viene rifiutata con un messaggio di errore | RF_LEG_2, D13 |
 
 ### 3.9 F9 Adesione alla lega (UC_LEG_1, RF_LEG_2)
 
@@ -255,7 +255,7 @@ implementa il Control corrispondente.
 | TF_LEG_13 | Pubblica, codice a mano, invito valido, non membro | Come TF_LEG_12, lega pubblica | Il sistema verifica il codice, aggiunge il Giocatore all'elenco dei membri e aggiorna la dashboard della lega | UC_LEG_1 passi 6-7 |
 | TF_LEG_14 | Pubblica, accesso diretto, nessun invito, non membro | Giocatore che trova la lega pubblica nella ricerca | Il Giocatore accede direttamente alla lega senza codice d'invito | UC_LEG_1 A1 |
 | TF_LEG_15 | link d'invito | Giocatore che apre il link d'invito ricevuto | Il Giocatore si unisce alla lega tramite il link | RF_LEG_2 |
-| TF_LEG_16 | Giocatore gia' membro | Il Giocatore inserisce il codice di una lega di cui e' gia' membro | **DA CONFERMARE** (domanda 8) | UC_LEG_1 passi 6-7 |
+| TF_LEG_16 | Giocatore gia' membro | Il Giocatore inserisce il codice di una lega di cui e' gia' membro | Il sistema mostra "Sei gia' membro di questa lega"; nessuna nuova adesione e l'elenco dei membri resta invariato | UC_LEG_1 passi 6-7, D17 |
 | TF_LEG_17 | invito errato | Codice non associato ad alcuna lega | Il sistema non trova alcuna lega associata, notifica l'errore richiedendo un nuovo inserimento e interrompe la procedura di unione | UC_LEG_1 E2 |
 | TF_LEG_18 | invito scaduto | Codice di una lega esistente ma scaduto | Come E2: il sistema notifica l'errore richiedendo un nuovo inserimento e interrompe la procedura di unione; il Giocatore non viene aggiunto | UC_LEG_1 E2 ("codice errato o scaduto") |
 
@@ -266,15 +266,15 @@ implementa il Control corrispondente.
 | TF_LEG_19 | amministratore, visualizza la lista | Lega con piu' membri | L'amministratore visualizza la lista dei membri | RF_LEG_3 |
 | TF_LEG_20 | amministratore, promuove un membro ordinario | Lega con almeno un membro ordinario | Il membro diventa amministratore della lega e resta tra i membri | RF_LEG_3 |
 | TF_LEG_21 | amministratore, rimuove un membro ordinario | Lega con almeno un membro ordinario | Il membro e' rimosso dalla lega e la lista dei membri e' aggiornata | RF_LEG_3 |
-| TF_LEG_22 | unico amministratore che rimuove se stesso | L'utente e' l'unico amministratore della lega | **DA CONFERMARE** (domanda 9): il class diagram prevede almeno un amministratore per lega, ma il RAD non dice l'esito | RF_LEG_3, class diagram (1..* amministratori) |
-| TF_LEG_23 | membro non amministratore | Membro ordinario che prova a promuovere o rimuovere | **DA CONFERMARE** (domanda 6): operazioni riservate all'amministratore (RF_LEG_3), ma il RAD non dice cosa vede il membro | RF_LEG_3 |
+| TF_LEG_22 | unico amministratore che rimuove se stesso | L'utente e' l'unico amministratore della lega | La richiesta e' rifiutata con "Nomina un altro amministratore prima di uscire"; l'utente resta amministratore e membro della lega | RF_LEG_3, class diagram (1..* amministratori), D17 |
+| TF_LEG_23 | membro non amministratore | Membro ordinario che prova a promuovere o rimuovere | I comandi di promozione e rimozione non sono visibili al membro; una richiesta diretta viene rifiutata con un messaggio di errore e la lista dei membri resta invariata | RF_LEG_3, D13 |
 
 ### 3.11 F11 Dashboard della lega (RF_LEG_4)
 
 | Id | Scelte combinate | Preparazione | Esito atteso | Flusso del caso d'uso |
 |---|---|---|---|---|
 | TF_LEG_24 | membro della lega | Giocatore membro che apre la lega | La dashboard mostra informazioni generali, lista dei partecipanti, prossime partite, storico degli incontri e classifica con le statistiche dei giocatori (gol e assist) | RF_LEG_4, tabella degli oggetti (`DashboardLega`) |
-| TF_LEG_25 | non membro | Giocatore che non appartiene alla lega prova ad aprirne la dashboard | **DA CONFERMARE** (domanda 10) | RF_LEG_4 |
+| TF_LEG_25 | non membro | Giocatore che non appartiene alla lega prova ad aprirne la dashboard | La DashboardLega non viene mostrata: per una lega pubblica il Giocatore vede il comando per unirsi, per una privata il messaggio "Lega privata: serve un invito" | RF_LEG_4, UC_LEG_1 A1, D17 |
 
 Totale frame: 43 (TF_ACC_01..18, TF_LEG_01..25)
 
@@ -284,18 +284,18 @@ E2 -> TF_LEG_17 e TF_LEG_18, A1 -> TF_LEG_02 e TF_LEG_14. Scelte al confine
 richieste dal ticket: nome lega duplicato (TF_LEG_04), codice scaduto
 (TF_LEG_18).
 
-## 4. Domande aperte per i PM
+## 4. Domande per i PM e risposte
 
-Finche' non ci sono risposte, i frame marcati **DA CONFERMARE** non hanno un
-esito completo e non vanno implementati come test.
+Risposte dei PM (Renato Mancino, 19/11/2026), registrate in
+`docs/modelli/DECISIONI_RAD.md`: nessun frame resta DA CONFERMARE.
 
-1. TF_ACC_07: cosa succede se il Giocatore conferma la Player Card senza ruolo in campo o piede dominante?
-2. TF_ACC_11-13: messaggio per il login fallito. Stesso messaggio generico per email non registrata e password errata (cosi' non si rivela quali email sono registrate)? E per i campi vuoti?
-3. TF_ACC_16: cosa vede chi chiede il recupero con un'email non associata (messaggio generico, per lo stesso motivo)?
-4. TF_ACC_17: cosa vede chi usa un collegamento di recupero scaduto o non valido (nuova richiesta?).
-5. TF_ACC_18: nuova password debole nel recupero: stesso controllo e messaggio di UC_ACC_1 E2?
-6. TF_LEG_07, TF_LEG_11, TF_LEG_23: un membro non amministratore che prova un'operazione riservata vede il comando nascosto o riceve un errore?
-7. TF_LEG_08: rinominare la lega con un nome gia' in uso si comporta come E1 della creazione?
-8. TF_LEG_16: cosa succede se un membro usa di nuovo il codice della sua lega?
-9. TF_LEG_22: l'unico amministratore puo' rimuovere se stesso? Se no, con quale messaggio; se si', cosa succede alla lega (vedi anche D12)?
-10. TF_LEG_25: cosa vede un non membro che apre la dashboard di una lega (privata o pubblica)?
+1. TF_ACC_07, Player Card incompleta. **Risposta:** come UC_ACC_1 E2, errore sul campo e Player Card non salvata (D16).
+2. TF_ACC_11-13, login fallito. **Risposta:** stesso messaggio generico "Email o password non corretti" per email non registrata e password errata; errore sul campo se vuoto (D16).
+3. TF_ACC_16, recupero con email non associata. **Risposta:** stesso messaggio del caso valido, nessuna email inviata (D16).
+4. TF_ACC_17, collegamento scaduto o non valido. **Risposta:** "Collegamento scaduto o non valido", si ripete la richiesta (D16).
+5. TF_ACC_18, nuova password debole. **Risposta:** come UC_ACC_1 E2 (D16).
+6. TF_LEG_07, 11, 23, operazioni riservate tentate da un membro. **Risposta:** comando non visibile; richiesta diretta rifiutata con errore (D13).
+7. TF_LEG_08, rinomina con nome gia' in uso. **Risposta:** come UC_LEG_1 E1 (D17).
+8. TF_LEG_16, codice usato da chi e' gia' membro. **Risposta:** "Sei gia' membro di questa lega", nessuna nuova adesione (D17).
+9. TF_LEG_22, unico amministratore che rimuove se stesso. **Risposta:** non ammesso, "Nomina un altro amministratore prima di uscire" (D17).
+10. TF_LEG_25, non membro sulla dashboard. **Risposta:** dashboard non mostrata; comando per unirsi se pubblica, "Lega privata: serve un invito" se privata (D17).
