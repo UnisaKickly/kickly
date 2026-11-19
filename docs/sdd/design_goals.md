@@ -4,7 +4,7 @@
 |---|---|
 | **Progetto** | Kickly |
 | **Riferimento** | KCK-260 |
-| **Versione** | 0.1 |
+| **Versione** | 0.2 |
 | **Data** | 19/11/2026 |
 | **Autori** | Gabriele Karol Vicinanza |
 | **Revisori** | Mario Celzo, Renato Mancino |
@@ -14,6 +14,7 @@
 
 | Data | Versione | Descrizione | Autori |
 |---|---|---|---|
+| 19/11/2026 | 0.2 | Riallineamento fedele a Kickly_SDD_v1.0.pdf, sezioni 1.2 e 1.3 | Gabriele Karol Vicinanza |
 | 19/11/2026 | 0.1 | Prima stesura | Gabriele Karol Vicinanza |
 
 ## Indice
@@ -25,27 +26,27 @@
 
 ## 1.2 Design Goals
 
-| Rank | ID Design Goal | Descrizione | Categoria | RNF di Origine |
-|---|---|---|---|---|
-| 1 | Sicurezza dei dati di pagamento | ll sistema deve delegare al fornitore esterno di pagamento (Stripe Connect) incasso delle quote, rimborso e accredito al Gestore del Campo, senza che alcun dato di carta o coordinata bancaria transiti nell’applicazione o sia memorizzato nei suoi archivi: del pagamento si conserva solo l’identificativo dell’account presso il fornitore (0 campi con dati di carta o IBAN nello schema della base di dati) . | Dependability | RNF_IN_1 |
-| 2 | Integrità delle transazioni di pagamento | In caso di interruzione della comunicazione con il fornitore di pagamento, il sistema deve registrare 0 doppi addebiti della stessa quota e 0 quote «Versate» il cui esito non sia stato confermato dal fornitore.» | Dependability | RNF_A_3 |
-| 3 | Affidabilità dell’RSVP | Il sistema deve elaborare le richieste concorrenti di conferma o ritiro presenza (RSVP) garantendo un tasso di successo del 99,9% , mantenendo un tasso di overbooking dello 0% assoluto sull'aggiornamento del contatore. | Dependability | RNF_A_2 |
-| 4 | Conformità GDPR | Il sistema deve supportare la cancellazione irreversibile dei dati personali: a seguito della richiesta di eliminazione dell’account, deve cancellare in modo definitivo tutti i dati personali dell’utente dai propri archivi entro 30 giorni dalla richiesta, conservando unicamente i dati che è tenuto a mantenere per obblighi di legge (le transazioni di pagamento), che vengono dissociati dall’identità dell’utente. | Dependability | RNF_L_1 |
-| 5 | Consistenza delle statistiche | Il sistema deve aggiornare le statistiche della Player Card (gol, assist, presenze, MVP) entro 1 minuto dalla chiusura di ciascun incontro, senza perdite in caso di riavvio o malfunzionamento e in modo coerente con lo storico degli incontri. | Dependability | RNF_A_1 |
-| 6 | Usabilità dell’onboarding | Il sistema deve permettere a un nuovo utente di completare registrazione, scelta del ruolo e configurazione della Player Card senza assistenza esterna in meno di 3 minuti. | End User | RNF_U_1 |
-| 7 | Usabilità dell’adesione alle leghe | L’interfaccia utente deve permettere a un Giocatore autenticato di unirsi a una lega, privata o pubblica, inserendo il codice d’invito o accedendo tramite link di condivisione, con un massimo di 3 interazioni (tap/click) e senza richiedere di reinserire dati già forniti. | End User | RNF_U_2 |
-| 8 | Tempo di registrazione del voto | Il sistema deve elaborare la registrazione del voto MVP entro un tempo massimo di 10 secondi, in modo da non bloccare l’interfaccia. | Performance | RNF_PRE_2 |
-| 9 | Portabilità e modificabilità | Il sistema deve essere realizzato con un’unica base di codice Flutter, appoggiandosi a Supabase per persistenza e autenticazione e a FCM per le notifiche push, con 0 riferimenti diretti ai loro SDK nel Presentation e nel Domain Layer, così che la sostituzione di un servizio esterno non modifichi interfaccia e logica applicativa del client. | Maintenance | RNF_IMP_1 |
-| 10 | Autoconsistenza del pacchetto | Il pacchetto di installazione distribuito deve contenere il 100% delle dipendenze e librerie client, garantendo il primo avvio dell'applicazione con 0 download di software aggiuntivi richiesti all'utente. | End User | RNF_P_1 |
-| 11 | Tempestività delle notifiche | Il sistema deve elaborare e recapitare le notifiche relative agli aggiornamenti di stato della partita ai dispositivi dei giocatori iscritti entro un tempo limite tassativo di 5 minuti (300 secondi) dall'evento scatenante. | Performance | RNF_PRE_1 |
-| 12 | Estensibilità | Aggiungere una nuova tipologia di lega o un nuovo canale di condivisione degli inviti deve richiedere 0 modifiche alle classi di gestione dei membri. | Maintenance | RNF_S_1 |
+| Rank | ID Design Goal | Nome | Descrizione | Categoria | RNF di Origine |
+|---|---|---|---|---|---|
+| 1 | DG_9 | Sicurezza dei dati di pagamento | Il sistema deve delegare al fornitore esterno di pagamento (Stripe Connect) il 100% delle operazioni di incasso delle quote, rimborso e accredito al Gestore del Campo, in modo che nessun dato di carta o coordinata bancaria transiti nell’applicazione né venga memorizzato nei suoi archivi: dei dati di pagamento il sistema conserva unicamente l’identificativo dell’account presso il fornitore, con 0 campi contenenti numero di carta, CVV o IBAN nello schema della base di dati e 0 endpoint applicativi abilitati a riceverli. | Dependability | RNF_IN_1 |
+| 2 | DG_10 | Robustezza transazionale | A fronte di interruzioni della comunicazione con il fornitore di pagamento, il sistema non deve addebitare due volte la stessa quota (anche in caso di nuovo tentativo del Giocatore) né registrare come versata una quota il cui esito non è stato confermato: ogni richiesta di pagamento è identificata da un riferimento idempotente, la Quota passa allo stato "Versata" solo alla ricezione dell'esito positivo e le operazioni rimaste in sospeso vengono riconciliate | Dependability | RNF_A_3 |
+| 3 | DG_5 | Affidabilità | Il sistema deve elaborare le richieste concorrenti di conferma o ritiro presenza (RSVP) garantendo un tasso di successo e disponibilità del 99,9% ("three nines"), mantenendo un tasso di overbooking dello 0% assoluto sull'aggiornamento del contatore. | Dependability | RNF_A_2 |
+| 4 | DG_11 | Conformità GDPR | Il sistema deve supportare la cancellazione irreversibile dei dati personali: a seguito della richiesta di eliminazione dell’account, deve cancellare in modo definitivo tutti i dati personali dell’utente dai propri archivi entro 30 giorni dalla richiesta, conservando unicamente i dati che è tenuto a mantenere per obblighi di legge (le transazioni di pagamento), che vengono dissociati dall’identità dell’utente. | Dependability | RNF_L_1 |
+| 5 | DG_2 | Affidabilità | Il sistema deve aggiornare le statistiche della Player Card (gol, assist, presenze, MVP) entro 1 minuto dalla chiusura di ciascun incontro, senza perdite in caso di riavvio o malfunzionamento e in modo coerente con lo storico degli incontri. | Dependability | RNF_A_1 |
+| 6 | DG_1 | Usabilità | Il sistema deve permettere a un nuovo utente di completare registrazione, scelta del ruolo e configurazione della Player Card senza assistenza esterna in meno di 3 minuti. | End User | RNF_U_1 |
+| 7 | DG_3 | Usabilità | L’interfaccia utente deve permettere a un Giocatore autenticato di unirsi a una lega, privata o pubblica, inserendo il codice d’invito o accedendo tramite link di condivisione, con un massimo di 3 interazioni (tap/click) e senza richiedere di reinserire dati già forniti. | End User | RNF_U_2 |
+| 8 | DG_7 | Prestazioni | Il sistema deve elaborare la registrazione del voto MVP entro un tempo massimo di 10 secondi, in modo da non bloccare l’interfaccia. | Performance | RNF_PRE_2 |
+| 9 | DG_8 | Implementazione | Il sistema deve essere realizzato con un’unica base di codice Flutter, distribuibile senza modifiche sia su Android sia su iOS, appoggiandosi a Supabase per la persistenza dei dati e l’autenticazione e a Firebase Cloud Messaging per le notifiche push. L’accesso a questi servizi deve essere confinato al Data Layer, con 0 riferimenti diretti agli SDK di Supabase e FCM nel Presentation Layer e nel Domain Layer, in modo che la sostituzione di un servizio esterno richieda modifiche ai soli repository. | Maintenance | RNF_IMP_1 |
+| 10 | DG_12 | Autoconsistenza del pacchetto | Il pacchetto di installazione distribuito deve contenere il 100% delle dipendenze e librerie client, garantendo il primo avvio dell'applicazione con 0 download di software aggiuntivi richiesti all'utente. | End User | RNF_P_1 |
+| 11 | DG_6 | Prestazioni | Il sistema deve elaborare e recapitare le notifiche relative agli aggiornamenti di stato della partita ai dispositivi dei giocatori iscritti entro un tempo limite tassativo di 5 minuti (300 secondi) dall'evento scatenante. | Performance | RNF_PRE_1 |
+| 12 | DG_4 | Estensibilità | L’architettura software deve impiegare pattern di progettazione disaccoppiati per consentire l’aggiunta di nuove tipologie di lega o di nuovi canali di condivisione degli inviti, senza modificare la logica di gestione dei membri. | Maintenance | RNF_S_1 |
 
 ## 1.3 Trade-off
 
 | Trade-off | Descrizione |
 |---|---|
-| Affidabilità dell’RSVP e sicurezza dei pagamenti Vs Portabilità e modificabilità | Per garantire lo 0% di overbooking e tenere la chiave segreta del fornitore di pagamento solo lato server, il contatore RSVP e i pagamenti sono eseguiti nelle Edge Functions di Supabase e non nello strato Data dell’app. Sostituire Supabase richiederebbe quindi di riscrivere tali funzioni, oltre ai repository: si sacrifica parte della sostituibilità dei servizi a favore di correttezza e sicurezza. |
-| Conformità GDPR Vs Consistenza delle statistiche | Per cancellare in modo definitivo i dati personali entro 30 giorni , l’identità dell’utente è dissociata dalle partite concluse. Statistiche storiche e Player Card delle partite passate non possono quindi essere conservate in modo completo e coerenti: prevale la tutela legale. |
+| Affidabilità delle adesioni e sicurezza dei pagamenti (DG_5, DG_9) Vs Implementazione (DG_8) | Per garantire lo 0% di overbooking sul contatore RSVP (DG_5, Rank 3) e mantenere la chiave segreta del fornitore di pagamento solo lato server (DG_9, Rank 1), la logica critica del contatore RSVP e dei pagamenti viene eseguita nelle Edge Functions di Supabase e non nello strato Data dell’applicazione. La sostituzione di Supabase richiederebbe quindi la riscrittura di tali funzioni, oltre alla modifica dei repository (DG_8, Rank 9). Si sacrifica parte della sostituibilità dei servizi esterni a favore della correttezza e della sicurezza. della protezione del dato. |
+| Conformità GDPR (DG_11) Vs Affidabilità (DG_2) | Per ottemperare agli obblighi di legge garantendo la cancellazione irreversibile e definitiva dei dati personali entro 30 giorni (DG_11, Rank 4), le identità vengono rimosse e dissociate dalle partite concluse. Questo comporta un sacrificio nella conservazione assoluta e coerente delle statistiche storiche e delle Player Card per le partite passate (DG_2, Rank 5), privilegiando la tutela legale. |
 
 ## 3.2 Decomposizione in sottosistemi
 
