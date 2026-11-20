@@ -10,8 +10,9 @@ import 'package:kickly/core/router/app_router.dart';
 /// Sessione finta: lo stato si cambia dal test e avvisa il router come fara'
 /// AutenticazioneControl dopo login e logout.
 class SessioneFinta extends ChangeNotifier implements SessioneProvider {
-  /// Crea la sessione finta con lo stato iniziale indicato.
-  SessioneFinta({bool autenticato = false}) : _autenticato = autenticato;
+  /// Crea la sessione finta con lo stato iniziale indicato (predefinito: non
+  /// autenticata).
+  SessioneFinta([this._autenticato = false]);
 
   bool _autenticato;
 
@@ -38,7 +39,7 @@ void main() {
 
   testWidgets('utente autenticato vede la dashboard', (tester) async {
     await tester.pumpWidget(
-      KicklyApp(sessioneProvider: SessioneFinta(autenticato: true)),
+      KicklyApp(sessioneProvider: SessioneFinta(true)),
     );
     await tester.pumpAndSettle();
 
