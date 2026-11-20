@@ -27,12 +27,6 @@ class SupabaseLegaRepository implements LegaRepository {
   /// Normalizza un nome come l'indice univoco della migration A.
   String _normalizeName(String name) => name.trim().toLowerCase();
 
-  /// Rimuove l'ID tecnico prima di un insert con UUID generato dal database.
-  Map<String, dynamic> _withoutId(Lega lega) {
-    final json = lega.toJson()..remove('id');
-    return json;
-  }
-
   /// Estrae una Lega da una riga di relazione `lega(*)`.
   Lega _fromRelation(Map<String, dynamic> row) {
     final relation = row['lega'];
@@ -76,30 +70,28 @@ class SupabaseLegaRepository implements LegaRepository {
   @override
   Future<Lega> createLega(Lega lega, String adminGiocatoreId) {
     return _execute(() async {
-      Lega? created;
-      try {
-        final row = await _client
-            .from('lega')
-            .insert(_withoutId(lega))
-            .select()
-            .single();
-        created = Lega.fromJson(row);
-
-        await _client.from('membro_lega').insert({
-          'lega_id': created.id,
-          'giocatore_id': adminGiocatoreId,
-        });
-        await _client.from('amministratore_lega').insert({
-          'lega_id': created.id,
-          'giocatore_id': adminGiocatoreId,
-        });
-      } catch (error) {
-        if (created != null) {
-          await _client.from('lega').delete().eq('id', created.id);
-        }
-        rethrow;
+      final response = await _client.rpc(
+        'crea_lega',
+        params: {
+          'p_nome': lega.nome,
+          'p_tipologia_match': lega.tipologiaMatch,
+          'p_privacy': lega.privacy,
+          'p_codice_invito': lega.codiceInvito,
+          'p_scadenza_codice_invito': lega.scadenzaCodiceInvito
+              ?.toUtc()
+              .toIso8601String(),
+          'p_admin_giocatore_id': adminGiocatoreId,
+        },
+      );
+      if (response is Map<String, dynamic>) {
+        return Lega.fromJson(response);
       }
-      return created;
+      if (response is List &&
+          response.isNotEmpty &&
+          response.first is Map<String, dynamic>) {
+        return Lega.fromJson(response.first as Map<String, dynamic>);
+      }
+      throw const FormatException('Risposta RPC crea_lega non valida');
     });
   }
 
@@ -143,7 +135,14 @@ class SupabaseLegaRepository implements LegaRepository {
   @override
   Future<bool> existsByNome(String nome) {
     return _execute(() async {
-      final rows = await _client.from('lega').select('nome');
+      final escaped = nome
+          .replaceAll(r'\', r'\\')
+          .replaceAll('%', r'\%')
+          .replaceAll('_', r'\_');
+      final rows = await _client
+          .from('lega')
+          .select('nome')
+          .ilike('nome', '%$escaped%');
       final normalized = _normalizeName(nome);
       return rows.any(
         (row) => _normalizeName(row['nome'] as String) == normalized,
@@ -180,6 +179,8 @@ class SupabaseLegaRepository implements LegaRepository {
     bool isAdmin = false,
   }) {
     return _execute(() async {
+      // Il membro viene scritto prima dell'amministratore: al commit della
+      // singola richiesta PostgREST ogni amministratore deve già essere membro.
       await _client.from('membro_lega').insert({
         'lega_id': legaId,
         'giocatore_id': giocatoreId,
@@ -209,6 +210,8 @@ class SupabaseLegaRepository implements LegaRepository {
           await _adminCount(legaId) <= 1) {
         throw _lastAdminError();
       }
+      // L'amministratore viene rimosso prima del membro: ogni constraint
+      // trigger DEFERRABLE INITIALLY DEFERRED vede uno stato valido al commit.
       await _client
           .from('amministratore_lega')
           .delete()

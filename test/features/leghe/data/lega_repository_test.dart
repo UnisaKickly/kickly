@@ -1,7 +1,49 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickly/core/errors/app_exception.dart';
 import 'package:kickly/features/leghe/data/in_memory_lega_repository.dart';
+import 'package:kickly/features/leghe/data/supabase_lega_repository.dart';
 import 'package:kickly/features/leghe/domain/lega.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class _RestServer {
+  late final HttpServer _server;
+
+  String get url => 'http://${_server.address.host}:${_server.port}';
+
+  Future<void> start(Future<void> Function(HttpRequest request) handler) async {
+    _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    _server.listen(handler);
+  }
+
+  Future<void> respond(HttpRequest request, int statusCode, Object body) async {
+    request.response
+      ..statusCode = statusCode
+      ..headers.contentType = ContentType.json
+      ..write(jsonEncode(body));
+    await request.response.close();
+  }
+
+  Future<void> close() => _server.close(force: true);
+}
+
+Future<T> _withLegaSupabase<T>(
+  Future<T> Function(SupabaseLegaRepository repository) body,
+  Future<void> Function(HttpRequest request) handler,
+) async {
+  final server = _RestServer();
+  await server.start(handler);
+  try {
+    return await HttpOverrides.runZoned(() async {
+      final client = SupabaseClient(server.url, 'test-anon-key');
+      return body(SupabaseLegaRepository(client));
+    });
+  } finally {
+    await server.close();
+  }
+}
 
 void main() {
   Lega lega({
@@ -138,5 +180,93 @@ void main() {
         isA<AppException>().having((error) => error.code, 'code', '23503'),
       ),
     );
+  });
+
+  test('Supabase createLega invoca la RPC e mappa la risposta', () async {
+    final source = lega(id: 'ignored-by-rpc');
+    final response = lega(id: 'lega-rpc-id').toJson();
+    var method = '';
+    var path = '';
+    final result = await _withLegaSupabase(
+      (repository) => repository.createLega(source, 'giocatore-1'),
+      (request) async {
+        method = request.method;
+        path = request.uri.path;
+        await _RestServer().respond(request, 200, response);
+      },
+    );
+
+    expect(method, 'POST');
+    expect(path, '/rest/v1/rpc/crea_lega');
+    expect(result.id, 'lega-rpc-id');
+    expect(result.codiceInvito, 'INVITO-TEST');
+  });
+
+  test('Supabase existsByNome filtra con ilike e normalizza in Dart', () async {
+    var query = '';
+    final result = await _withLegaSupabase(
+      (repository) => repository.existsByNome('  Lega 100%  '),
+      (request) async {
+        query = request.uri.query;
+        await _RestServer().respond(request, 200, [
+          {'nome': 'Lega 100%'},
+          {'nome': 'Lega 100X'},
+        ]);
+      },
+    );
+
+    expect(query, contains('ilike'));
+    expect(result, isTrue);
+  });
+
+  test('Supabase traduce 23505 in AppException.database', () async {
+    final result = await _withLegaSupabase<Object?>(
+      (repository) => repository
+          .createLega(lega(), 'giocatore-1')
+          .then<Object?>((_) => null, onError: (Object error) => error),
+      (request) => _RestServer().respond(request, 409, {
+        'code': '23505',
+        'message': 'duplicate league name',
+        'details': 'lega_nome_unico_idx',
+        'hint': null,
+      }),
+    );
+
+    expect(result, isA<AppException>());
+    expect((result as AppException).code, '23505');
+  });
+
+  test('Supabase traduce 23514 in AppException.database', () async {
+    final result = await _withLegaSupabase<Object?>(
+      (repository) => repository
+          .rimuoviMembro('lega-1', 'giocatore-1')
+          .then((_) => null, onError: (Object error) => error),
+      (request) async {
+        if (request.uri.path.endsWith('/amministratore_lega')) {
+          if (request.uri.query.contains('giocatore_id')) {
+            await _RestServer().respond(request, 200, [
+              {'giocatore_id': 'giocatore-1'},
+            ]);
+          } else if (request.method == 'GET') {
+            await _RestServer().respond(request, 200, [
+              {'giocatore_id': 'giocatore-1'},
+              {'giocatore_id': 'giocatore-2'},
+            ]);
+          } else {
+            await _RestServer().respond(request, 409, {
+              'code': '23514',
+              'message': 'last administrator',
+              'details': 'constraint',
+              'hint': null,
+            });
+          }
+        } else {
+          await _RestServer().respond(request, 200, []);
+        }
+      },
+    );
+
+    expect(result, isA<AppException>());
+    expect((result as AppException).code, '23514');
   });
 }

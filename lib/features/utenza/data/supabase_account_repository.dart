@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/errors/app_exception.dart';
 import '../../../core/persistence/supabase_client_provider.dart';
 import '../domain/account.dart';
 import '../domain/account_repository.dart';
@@ -85,7 +86,11 @@ class SupabaseAccountRepository implements AccountRepository {
     if (account is T) {
       return account;
     }
-    throw StateError('Specializzazione account non trovata');
+    throw AppException.unexpected(
+      originalError: StateError(
+        'Specializzazione account non trovata per l\'account $id.',
+      ),
+    );
   }
 
   @override
