@@ -62,8 +62,15 @@ CREATE TABLE public.partita (
             OR num_partecipanti_richiesti >= 2 * split_part(tipologia, 'v', 1)::integer
         ),
     CONSTRAINT partita_stato_check
-        CHECK (stato IN ('Aperta', 'Completa', 'Confermata', 'Conclusa', 'Annullata'))
+        CHECK (stato IN ('Aperta', 'Completa', 'Confermata', 'Conclusa', 'Annullata')),
+    CONSTRAINT partita_pubblica_senza_lega_check
+        CHECK (privacy <> 'pubblica' OR lega_id IS NULL)
 );
+
+-- Associazione 10 di class_diagram_sdd.md ("partita pubblica = senza lega"):
+-- una partita di lega e' sempre privata. Decisione PM su KCK-210 (domanda 8).
+COMMENT ON CONSTRAINT partita_pubblica_senza_lega_check ON public.partita IS
+    'Associazione 10: una partita pubblica non appartiene a nessuna lega (le partite di lega sono private).';
 
 COMMENT ON COLUMN public.partita.giocatore_id IS
     'Organizzatore della partita (associazione Giocatore 1 — 0..* Partita). La colonna segue la regola 9 (<entity>_id), come amministratore_lega.giocatore_id nella Migration A.';

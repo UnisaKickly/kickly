@@ -6,7 +6,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(12);
+SELECT plan(13);
 
 -- Seed: tre partite (criterio di accettazione).
 SELECT is(
@@ -104,6 +104,15 @@ SELECT throws_ok(
     '23514',
     NULL,
     'una partita 5v5 con meno di 10 partecipanti richiesti viene rifiutata'
+);
+
+-- Associazione 10: una partita di lega (la 0301) non puo' diventare pubblica.
+SELECT throws_ok(
+    $$UPDATE public.partita SET privacy = 'pubblica'
+      WHERE id = '20200000-0000-4000-8000-000000000301'$$,
+    '23514',
+    NULL,
+    'una partita di lega non puo'' essere pubblica'
 );
 
 SELECT * FROM finish();
