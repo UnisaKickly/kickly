@@ -74,9 +74,12 @@ a realizzare il diagramma su Supabase senza aggiungere elementi al modello.
    entrambe (molteplicita' 1..*).
 4. **`Prenotazione.intervallo`** resta String con un formato unico di slot
    (es. `2026-11-20T18:00/2026-11-20T19:00`) ricavato da
-   `Campo.orariDisponibilita`. Le sovrapposizioni si evitano con un vincolo
-   UNIQUE su (campo, intervallo) per le prenotazioni con `statoBlocco` attivo,
-   insieme a `scadenzaBlocco` per liberare gli slot non confermati.
+   `Campo.orariDisponibilita`. Le sovrapposizioni si evitano con un vincolo di
+   esclusione (`EXCLUDE USING gist`, estensione `btree_gist`) su (campo,
+   intervallo) per le prenotazioni con `statoBlocco` attivo (bloccato o
+   confermato): un UNIQUE fermerebbe solo gli intervalli identici, non quelli
+   sovrapposti (18:00/19:00 e 18:30/19:30). Resta `scadenzaBlocco` per liberare
+   gli slot non confermati.
 5. **`Campo.orariDisponibilita`** e' una colonna di Campo, non una tabella.
 6. **`VotazioneMVP.preferenzeVotanteVotato`** (mappa votante -> votato) e' una
    tabella (votazione, votante, votato) con UNIQUE (votazione, votante);
