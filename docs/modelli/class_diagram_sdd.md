@@ -88,3 +88,5 @@ a realizzare il diagramma su Supabase senza aggiungere elementi al modello.
    `partita.organizzatore` NOT NULL, `partita.lega` facoltativa,
    `quota.partecipazione` NOT NULL e UNIQUE, `votazione_mvp.partita` NOT NULL e
    UNIQUE, `partecipazione` UNIQUE (giocatore, partita).
+9. id e chiavi esterne sono attributi tecnici di mappatura, non del modello.
+   Le sottoclassi di Account ereditano id; nel database la chiave è account_id.
