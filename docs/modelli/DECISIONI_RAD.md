@@ -180,3 +180,24 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Decisione:** Il nome della lega e' unico senza distinguere maiuscole e spazi iniziali/finali ("Champions Giovedi'" e "champions giovedi' " sono lo stesso nome). Nel database: indice UNIQUE su `lower(btrim(nome))` e CHECK sul nome non vuoto, cosi' il controllo regge anche a due creazioni contemporanee; il Control mostra l'errore di E1. Vale anche per la modifica (D17).
 * **Ticket coinvolti:** KCK-202, KCK-242, KCK-249; test frame TF_LEG_04, TF_LEG_05, TF_LEG_08 (KCK-232)
 
+---
+
+## D22 – Messaggi alle entity nei sequence diagram
+
+* **Problema:** I sequence diagram mandano messaggi alle entity (es. `Giocatore.aggiornaDati()` in SD_UC_ACC_1), ma in `class.puml` le entity non hanno metodi e nel codice sono classi di soli dati; l'SDD (§3.2.2, strato Data) affida l'accesso ai dati a un Repository per ogni entity.
+* **Decisione:** Ogni messaggio che un sequence manda a un'entity diventa un metodo del **Repository di quella entity**, con lo stesso nome; l'entity resta di soli dati (attributi `final`, `fromJson`/`toJson`). Il Control costruisce l'entity con i nuovi valori e chiama il repository. Messaggi oggi nei sequence:
+  * SD_UC_ACC_1: `Account.create(dati)`, `Giocatore.create()`, `Giocatore.aggiornaDati()` → `AccountRepository` (Giocatore e GestoreCampo stanno in AccountRepository);
+  * SD_UC_PAR_1: `Campo.getDisponibilita()`, `Campo.getTariffa()` → `CampoRepository`; `Partita.create(stato=Aperta)` → `PartitaRepository`; `Prenotazione.create()` → `PrenotazioneRepository`;
+  * SD_UC_PAG_1: `Quota.leggiQuota()`, `Quota.registraVersamento()` → `QuotaRepository`; `Transazione.creaTransazione()` → `TransazioneRepository`.
+
+  Il messaggio di creazione `create` diventa il metodo di inserimento del repository; quando nello stesso repository sarebbe ambiguo (AccountRepository crea sia Account sia Giocatore), il nome si propone nel piano del ticket e si fa approvare.
+* **Ticket coinvolti:** KCK-196, KCK-203, KCK-211 (repository); KCK-250, KCK-235, KCK-214 (Control che chiamano questi metodi); KCK-246, KCK-252 (entity)
+
+---
+
+## D23 – Chi genera l'id degli oggetti nuovi
+
+* **Problema:** Nelle entity `id` e' obbligatorio e `toJson` lo scrive, ma nelle migration l'id lo genera il database (`DEFAULT gen_random_uuid()`); va deciso chi lo genera per un oggetto nuovo.
+* **Decisione:** L'id lo genera **il database**. Il repository inserisce la riga senza `id`, si fa restituire la riga creata e costruisce l'entity con l'id vero; nelle entity `id` resta obbligatorio (un'entity rappresenta sempre un oggetto salvato) e `toJson` lo scrive per gli aggiornamenti. Nessuna dipendenza nuova per generare uuid nel client. Per Account l'id e' quello di Supabase Auth, scritto dal trigger della migration A. Per la Lega la creazione e' un'unica chiamata (lega, membro e amministratore nella stessa transazione, vedi PR #38) che restituisce l'id.
+* **Ticket coinvolti:** KCK-196, KCK-203, KCK-211 (repository); KCK-242 (creazione lega); KCK-246, KCK-252 (entity)
+
