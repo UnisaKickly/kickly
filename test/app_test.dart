@@ -38,9 +38,7 @@ void main() {
   });
 
   testWidgets('utente autenticato vede la dashboard', (tester) async {
-    await tester.pumpWidget(
-      KicklyApp(sessioneProvider: SessioneFinta(true)),
-    );
+    await tester.pumpWidget(KicklyApp(sessioneProvider: SessioneFinta(true)));
     await tester.pumpAndSettle();
 
     expect(find.byType(Dashboard), findsOneWidget);
