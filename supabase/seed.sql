@@ -351,4 +351,123 @@ VALUES
         now()
     );
 
+-- Parte C (KCK-218): votazione, notifiche, quote e transazioni.
+-- Fixture dedicata: partita conclusa con due partecipanti per verificare
+-- l'unicita' del voto per votante e l'idempotenza delle transazioni.
+INSERT INTO public.partita (
+    id,
+    giocatore_id,
+    lega_id,
+    data_ora,
+    tipologia,
+    privacy,
+    num_partecipanti_richiesti,
+    stato,
+    link_condivisione
+)
+VALUES (
+    '20200000-0000-4000-8000-000000000304',
+    '20200000-0000-4000-8000-000000000001',
+    NULL,
+    now() - interval '1 day',
+    '5v5',
+    'pubblica',
+    10,
+    'Conclusa',
+    'https://kickly.example.test/partita/20200000-0000-4000-8000-000000000304'
+);
+
+INSERT INTO public.partecipazione (
+    id,
+    giocatore_id,
+    partita_id,
+    risposta_stato,
+    data_risposta
+)
+VALUES
+    (
+        '20200000-0000-4000-8000-000000000507',
+        '20200000-0000-4000-8000-000000000002',
+        '20200000-0000-4000-8000-000000000304',
+        'confermata',
+        now() - interval '1 day'
+    ),
+    (
+        '20200000-0000-4000-8000-000000000508',
+        '20200000-0000-4000-8000-000000000003',
+        '20200000-0000-4000-8000-000000000304',
+        'confermata',
+        now() - interval '1 day'
+    );
+
+INSERT INTO public.votazione_mvp (
+    id,
+    partita_id,
+    stato_votazione,
+    scadenza
+)
+VALUES (
+    '20200000-0000-4000-8000-000000000601',
+    '20200000-0000-4000-8000-000000000304',
+    'aperta',
+    now() + interval '1 day'
+);
+
+INSERT INTO public.preferenza_voto_mvp (votazione_id, votante_id, votato_id)
+VALUES (
+    '20200000-0000-4000-8000-000000000601',
+    '20200000-0000-4000-8000-000000000002',
+    '20200000-0000-4000-8000-000000000003'
+);
+
+INSERT INTO public.notifica (id, account_id, tipo, messaggio)
+VALUES (
+    '20200000-0000-4000-8000-000000000701',
+    '20200000-0000-4000-8000-000000000002',
+    'votazione_mvp',
+    'La votazione MVP della partita e'' aperta.'
+);
+
+INSERT INTO public.quota (
+    id,
+    partecipazione_id,
+    importo,
+    stato_versamento,
+    termine_versamento
+)
+VALUES
+    (
+        '20200000-0000-4000-8000-000000000801',
+        '20200000-0000-4000-8000-000000000507',
+        8.00,
+        'Versata',
+        now() + interval '1 day'
+    ),
+    (
+        '20200000-0000-4000-8000-000000000802',
+        '20200000-0000-4000-8000-000000000508',
+        8.00,
+        'DaVersare',
+        now() + interval '1 day'
+    );
+
+INSERT INTO public.transazione (
+    id,
+    quota_id,
+    tipo,
+    importo,
+    stato,
+    data_esito,
+    riferimento_esterno
+)
+VALUES (
+    '20200000-0000-4000-8000-000000000901',
+    '20200000-0000-4000-8000-000000000801',
+    'pagamento',
+    8.00,
+    'completata',
+    now(),
+    'evt_kickly_test_pagamento_20200000000000000000000000000801'
+);
+
 COMMIT;
