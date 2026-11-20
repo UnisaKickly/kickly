@@ -57,5 +57,34 @@ void main() {
       expect(json['primo_accesso'], '2026-11-01T09:30:00.000Z');
       expect(json['ultimo_accesso'], '2026-11-20T18:15:45.123Z');
     });
+
+    test('legge date con i microsecondi come le restituisce PostgREST', () {
+      // Preparazione: timestamptz con sei cifre decimali, formato di PostgREST.
+      // Esito atteso: i microsecondi sono conservati in lettura e nel round-trip.
+      final riga = rigaSupabase()
+        ..['primo_accesso'] = '2026-11-20T18:00:00.123456+00:00'
+        ..['ultimo_accesso'] = '2026-11-20T18:30:00.000001+00:00';
+
+      final dispositivo = DispositivoRegistrato.fromJson(riga);
+
+      expect(
+        dispositivo.primoAccesso,
+        DateTime.utc(2026, 11, 20, 18, 0, 0, 123, 456),
+      );
+      expect(dispositivo.primoAccesso.microsecond, 456);
+      expect(
+        dispositivo.ultimoAccesso,
+        DateTime.utc(2026, 11, 20, 18, 30, 0, 0, 1),
+      );
+
+      final json = dispositivo.toJson();
+      expect(json['primo_accesso'], '2026-11-20T18:00:00.123456Z');
+      expect(json['ultimo_accesso'], '2026-11-20T18:30:00.000001Z');
+
+      final riletto = DispositivoRegistrato.fromJson(json);
+      expect(riletto.primoAccesso, dispositivo.primoAccesso);
+      expect(riletto.ultimoAccesso, dispositivo.ultimoAccesso);
+      expect(riletto.toJson(), json);
+    });
   });
 }

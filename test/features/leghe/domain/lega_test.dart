@@ -69,6 +69,28 @@ void main() {
       });
       expect(json['scadenza_codice_invito'], '2026-11-27T20:00:00.000Z');
     });
+
+    test('legge la scadenza con i microsecondi come la restituisce PostgREST', () {
+      // Preparazione: timestamptz con sei cifre decimali, formato di PostgREST.
+      // Esito atteso: i microsecondi sono conservati in lettura e nel round-trip.
+      final riga = rigaSupabase()
+        ..['scadenza_codice_invito'] = '2026-11-20T18:00:00.123456+00:00';
+
+      final lega = Lega.fromJson(riga);
+
+      expect(
+        lega.scadenzaCodiceInvito,
+        DateTime.utc(2026, 11, 20, 18, 0, 0, 123, 456),
+      );
+      expect(lega.scadenzaCodiceInvito!.microsecond, 456);
+
+      final json = lega.toJson();
+      expect(json['scadenza_codice_invito'], '2026-11-20T18:00:00.123456Z');
+
+      final riletta = Lega.fromJson(json);
+      expect(riletta.scadenzaCodiceInvito, lega.scadenzaCodiceInvito);
+      expect(riletta.toJson(), json);
+    });
   });
 
   group('valori ammessi', () {
