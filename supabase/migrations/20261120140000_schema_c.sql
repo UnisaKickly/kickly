@@ -56,11 +56,13 @@ CREATE TABLE public.quota (
     CONSTRAINT quota_partecipazione_id_key UNIQUE (partecipazione_id),
     CONSTRAINT quota_partecipazione_id_fkey
         FOREIGN KEY (partecipazione_id) REFERENCES public.partecipazione (id) ON DELETE CASCADE,
-    CONSTRAINT quota_importo_check CHECK (importo >= 0)
+    CONSTRAINT quota_importo_check CHECK (importo >= 0),
+    CONSTRAINT quota_stato_versamento_check
+        CHECK (stato_versamento IN ('da_versare', 'versata', 'rimborsata'))
 );
 
 COMMENT ON COLUMN public.quota.stato_versamento IS
-    'I valori ammessi sono in attesa di conferma da parte dei PM.';
+    'Valori ammessi: da_versare, versata, rimborsata.';
 
 CREATE TABLE public.transazione (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
