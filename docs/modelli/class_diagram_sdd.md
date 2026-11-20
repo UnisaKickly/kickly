@@ -88,5 +88,4 @@ a realizzare il diagramma su Supabase senza aggiungere elementi al modello.
    `partita.organizzatore` NOT NULL, `partita.lega` facoltativa,
    `quota.partecipazione` NOT NULL e UNIQUE, `votazione_mvp.partita` NOT NULL e
    UNIQUE, `partecipazione` UNIQUE (giocatore, partita).
-9. id e chiavi esterne sono attributi tecnici di mappatura, non del modello.
-   Le sottoclassi di Account ereditano id; nel database la chiave è account_id.
+9. id e chiavi esterne sono attributi tecnici di mappatura, non del modello. Nel codice si chiamano `id` (chiave della classe) e `<entity>Id` (chiavi esterne), e corrispondono alle colonne `id` e `<entity>_id` del database (es. `accountId` ↔ `account_id`). Le sottoclassi di Account ereditano `id`; nel database la loro chiave è `account_id`.
