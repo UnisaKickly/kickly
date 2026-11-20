@@ -1,3 +1,10 @@
+// Widget radice dell'app Kickly (KCK-194).
+//
+// Collega tema e routing condivisi. Contiene anche le schermate segnaposto
+// delle 4 rotte (UI_1, UI_7, UI_2, Dashboard): servono solo a far funzionare la
+// navigazione e vanno eliminate da qui quando i ticket dei casi d'uso creano le
+// Boundary vere in lib/features/<sottosistema>/presentation/, altrimenti ci
+// sarebbero due classi con lo stesso nome.
 import 'package:flutter/material.dart';
 
 import 'core/router/app_router.dart';
@@ -8,7 +15,7 @@ class KicklyApp extends StatefulWidget {
   /// Crea l'app con una sessione non autenticata se non ne viene fornita una.
   const KicklyApp({
     super.key,
-    this.sessioneProvider = const SessioneProvider(),
+    this.sessioneProvider = const SessioneNonAutenticata(),
   });
 
   /// Provider iniettabile per decidere la rotta iniziale dell'app.
@@ -77,6 +84,9 @@ class SchermataIniziale extends StatelessWidget {
 }
 
 /// Rappresenta provvisoriamente il punto di ingresso al login.
+///
+/// Segnaposto (UI_7, sostituito dal ticket di RF_ACC_3):
+/// da eliminare quando esiste la Boundary vera.
 class FormLogin extends StatelessWidget {
   /// Crea il placeholder del form di login.
   const FormLogin({super.key});
@@ -89,6 +99,9 @@ class FormLogin extends StatelessWidget {
 }
 
 /// Rappresenta provvisoriamente il punto di ingresso alla registrazione.
+///
+/// Segnaposto (UI_2, sostituito dal ticket di UC_ACC_1):
+/// da eliminare quando esiste la Boundary vera.
 class FormRegistrazione extends StatelessWidget {
   /// Crea il placeholder del form di registrazione.
   const FormRegistrazione({super.key});
@@ -101,6 +114,9 @@ class FormRegistrazione extends StatelessWidget {
 }
 
 /// Rappresenta provvisoriamente la dashboard dell'utente autenticato.
+///
+/// Segnaposto (sostituito dal ticket della Dashboard):
+/// da eliminare quando esiste la Boundary vera.
 class Dashboard extends StatelessWidget {
   /// Crea il placeholder della dashboard.
   const Dashboard({super.key});

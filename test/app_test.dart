@@ -1,7 +1,29 @@
+// Widget test dell'app shell (KCK-194): tema, routing e blocco di accesso.
+//
+// Ogni test segue lo schema Arrange / Act / Assert e usa una sessione finta
+// (SessioneFinta) al posto di AutenticazioneControl, come chiede il ticket.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickly/app.dart';
 import 'package:kickly/core/router/app_router.dart';
+
+/// Sessione finta: lo stato si cambia dal test e avvisa il router come fara'
+/// AutenticazioneControl dopo login e logout.
+class SessioneFinta extends ChangeNotifier implements SessioneProvider {
+  /// Crea la sessione finta con lo stato iniziale indicato.
+  SessioneFinta({bool autenticato = false}) : _autenticato = autenticato;
+
+  bool _autenticato;
+
+  @override
+  bool get autenticato => _autenticato;
+
+  /// Cambia lo stato della sessione e avvisa i listener (il router).
+  set autenticato(bool valore) {
+    _autenticato = valore;
+    notifyListeners();
+  }
+}
 
 void main() {
   testWidgets('utente non autenticato vede la schermata iniziale', (
@@ -11,14 +33,16 @@ void main() {
 
     expect(find.text('Ciao da Kickly!'), findsOneWidget);
     expect(find.byIcon(Icons.sports_soccer), findsOneWidget);
+    expect(find.byType(SchermataIniziale), findsOneWidget);
   });
 
   testWidgets('utente autenticato vede la dashboard', (tester) async {
     await tester.pumpWidget(
-      const KicklyApp(sessioneProvider: SessioneProvider(autenticato: true)),
+      KicklyApp(sessioneProvider: SessioneFinta(autenticato: true)),
     );
+    await tester.pumpAndSettle();
 
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.byType(Dashboard), findsOneWidget);
     expect(find.text('Ciao da Kickly!'), findsNothing);
   });
 
@@ -26,7 +50,7 @@ void main() {
     tester,
   ) async {
     final AppRouter appRouter = AppRouter(
-      sessioneProvider: const SessioneProvider(),
+      sessioneProvider: const SessioneNonAutenticata(),
     );
 
     await tester.pumpWidget(MaterialApp.router(routerConfig: appRouter.router));
@@ -34,77 +58,52 @@ void main() {
     appRouter.router.go('/dashboard');
     await tester.pumpAndSettle();
 
-    expect(find.text('Ciao da Kickly!'), findsOneWidget);
-    expect(find.text('Dashboard'), findsNothing);
-  });
-
-  // Verifica l'avvio senza autenticazione: prepara SessioneProvider non autenticato,
-  // monta KicklyApp e controlla che venga mostrata SchermataIniziale.
-  testWidgets('avvio con utente non autenticato mostra SchermataIniziale', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const KicklyApp(sessioneProvider: SessioneProvider(autenticato: false)),
-    );
-    await tester.pumpAndSettle();
-
     expect(find.byType(SchermataIniziale), findsOneWidget);
+    expect(find.byType(Dashboard), findsNothing);
   });
 
-  // Verifica l'avvio con autenticazione: prepara SessioneProvider autenticato,
-  // monta KicklyApp e controlla che venga mostrata Dashboard.
-  testWidgets('avvio con utente autenticato mostra Dashboard', (tester) async {
-    await tester.pumpWidget(
-      const KicklyApp(sessioneProvider: SessioneProvider(autenticato: true)),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(Dashboard), findsOneWidget);
-  });
-
-  // Verifica il blocco della dashboard: apre direttamente la route protetta
-  // con SessioneProvider non autenticato e attende il reindirizzamento iniziale.
-  testWidgets(
-    'accesso diretto a /dashboard senza autenticazione reindirizza a SchermataIniziale',
-    (tester) async {
-      final appRouter = AppRouter(
-        sessioneProvider: const SessioneProvider(autenticato: false),
-      );
-      appRouter.router.go('/dashboard');
-
-      await tester.pumpWidget(
-        MaterialApp.router(routerConfig: appRouter.router),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byType(SchermataIniziale), findsOneWidget);
-    },
-  );
-
-  // Verifica che login e registrazione restino accessibili agli utenti non autenticati:
-  // prepara due router separati, naviga alle rispettive route e controlla il boundary mostrato.
+  // Verifica che login e registrazione restino accessibili agli utenti non
+  // autenticati: naviga alle due rotte e controlla la Boundary mostrata.
   testWidgets(
     'utente non autenticato accede regolarmente a FormLogin e FormRegistrazione',
     (tester) async {
-      final loginRouter = AppRouter(
-        sessioneProvider: const SessioneProvider(autenticato: false),
+      final AppRouter appRouter = AppRouter(
+        sessioneProvider: const SessioneNonAutenticata(),
       );
-      loginRouter.router.go('/login');
       await tester.pumpWidget(
-        MaterialApp.router(routerConfig: loginRouter.router),
+        MaterialApp.router(routerConfig: appRouter.router),
       );
+
+      appRouter.router.go('/login');
       await tester.pumpAndSettle();
       expect(find.byType(FormLogin), findsOneWidget);
 
-      final registrazioneRouter = AppRouter(
-        sessioneProvider: const SessioneProvider(autenticato: false),
-      );
-      registrazioneRouter.router.go('/registrazione');
-      await tester.pumpWidget(
-        MaterialApp.router(routerConfig: registrazioneRouter.router),
-      );
+      appRouter.router.go('/registrazione');
       await tester.pumpAndSettle();
       expect(find.byType(FormRegistrazione), findsOneWidget);
     },
   );
+
+  // Verifica che il router ascolti la sessione: dal form di login, appena la
+  // sessione diventa autenticata, passa da solo alla dashboard; dopo il logout
+  // torna alla schermata iniziale.
+  testWidgets('login e logout cambiano schermata senza navigare a mano', (
+    tester,
+  ) async {
+    final SessioneFinta sessione = SessioneFinta();
+    final AppRouter appRouter = AppRouter(sessioneProvider: sessione);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: appRouter.router));
+    appRouter.router.go('/login');
+    await tester.pumpAndSettle();
+    expect(find.byType(FormLogin), findsOneWidget);
+
+    sessione.autenticato = true;
+    await tester.pumpAndSettle();
+    expect(find.byType(Dashboard), findsOneWidget);
+
+    sessione.autenticato = false;
+    await tester.pumpAndSettle();
+    expect(find.byType(SchermataIniziale), findsOneWidget);
+    expect(find.byType(Dashboard), findsNothing);
+  });
 }
