@@ -210,3 +210,27 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Cancellazione dei dati (DG4):** le chiavi esterne verso Giocatore, GestoreCampo, Lega, Campo e Partita sono `ON DELETE CASCADE` (D12: la cancellazione dell'account non si blocca mai). Cancellando un organizzatore spariscono le sue partite con prenotazioni e partecipazioni, anche quelle concluse con le statistiche di altri giocatori (DG5): se `CancellazioneAccountControl` deve riassegnarle e' una scelta da fare in KCK-204.
 * **Ticket coinvolti:** KCK-210 (migration B, PR #51); KCK-203 (repository B); KCK-252 (entity Partita, Prenotazione, Partecipazione); KCK-204 (cancellazione account)
 
+---
+
+## D25 – Quote: chi le crea, importo, commissione e termine di versamento
+
+* **Problema:** Nessun caso d'uso o sequence dice chi crea la Quota e quando, se l'Organizzatore e' un partecipante, come si calcola la quota (UC_PAR_1 passo 3), quanto vale la commissione (RF_PAG_2) e qual e' il termine di versamento (`Quota.termineVersamento`, statechart: scadenza pagamento). Righe C9–C13 di `CONTROLLO_COERENZA.md` (KCK-221).
+* **Decisione:**
+  * **Organizzatore (C10):** alla creazione della partita viene creata anche la sua Partecipazione con `rispostaStato` = `confermata`: occupa un posto (RF_PAR_2) e versa la quota come gli altri.
+  * **Formula (C11):** `costoConcordato` = `Campo.tariffaOraria` × durata in ore di `Prenotazione.intervallo`; `quotaIndividuale` = `costoConcordato` / `Partita.numPartecipantiRichiesti`, arrotondata per eccesso al centesimo; `nettoGestore` = `costoConcordato` − `commissione`.
+  * **Commissione (C12):** 5% di `costoConcordato`, arrotondata al centesimo, salvata in `Prenotazione.commissione`; il 5% e' una costante di configurazione definita in un solo punto. Pagamenti solo in modalita' test di Stripe.
+  * **Creazione della Quota (C9):** quando la partita passa a Completa, GestionePartitaControl chiede a GestioneTransazioniControl (dipendenza ammessa Partite -> Pagamenti) di creare, tramite QuotaRepository, una Quota per ogni Partecipazione `confermata` che non ne ha gia' una, con `importo` = `quotaIndividuale` e `statoVersamento` = `da_versare`. Valori di `statoVersamento`: `da_versare`, `versata`, `rimborsata`. Se un Giocatore si ritira e la partita torna Aperta, la sua Quota `da_versare` si elimina; se e' `versata` si rimborsa con il flusso di RF_PAG_3.
+  * **Termine (C13):** `termineVersamento` = 24 ore prima di `Partita.dataOra` (come D5); se la partita diventa Completa quando mancano gia' meno di 24 ore, 2 ore prima di `dataOra`. Allo scadere con quote `da_versare` il server annulla la partita con il flusso di D6.
+* **Ticket coinvolti:** KCK-218 (migration C, CHECK su `statoVersamento`); KCK-211 (repository C); KCK-235 (creazione partita e Partecipazione dell'Organizzatore); KCK-214 (pagamento); KCK-197 (annullamento e rimborsi); KCK-252 (entity Quota, Prenotazione)
+
+---
+
+## D26 – Conferma della partita e chiamate tra sottosistemi
+
+* **Problema:** In SD_UC_PAG_1 la conferma della prenotazione e' un'auto-chiamata di GestioneTransazioniControl, mentre `component.puml` ammette solo Partite -> Pagamenti; in SD_UC_PAR_1 i Control delle Partite leggono il Campo, che sta nel sottosistema Strutture; i messaggi a GatewayPagamenti non hanno operazioni e la notifica di conferma agli altri Giocatori non compare nel sequence. Righe C14, C16, C20, C21 di `CONTROLLO_COERENZA.md` (KCK-221).
+* **Decisione:**
+  * **Conferma (C14, C15):** GestioneTransazioniControl, tramite QuotaRepository, conta le quote `da_versare` e verifica "tutte le quote versate". Dopo l'ultimo `registraVersamento()` lo rileva il server (trigger o Edge Function, come in D6), che esegue il flusso di `confermaPrenotazione()` di GestionePartitaControl (C4): partita Confermata, slot `confermato` tramite PrenotazioneControl, accredito al Gestore chiesto a GestioneTransazioniControl (`disponiAccredito()`). Non si aggiunge la dipendenza Pagamenti -> Partite.
+  * **Campo (C16):** PrenotazioneControl e GestionePartitaControl chiedono disponibilita' e tariffa a GestioneCampiControl (dipendenza ammessa Partite -> Strutture), che usa `CampoRepository` con i metodi di D22. `component.puml` non cambia.
+  * **Notifiche (C20):** alla conferma NotificaControl notifica tutti i Giocatori con Partecipazione `confermata` e il Gestore del Campo (estende C7).
+  * **GatewayPagamenti (C21):** e' un'interfaccia del livello Data con `richiediPagamento()` e `disponiAccredito()`, piu' il rimborso di RF_PAG_3 da proporre nel piano di KCK-214; `completaPagamento()` lo fa il Giocatore sulla pagina del fornitore e non e' un metodo.
+* **Ticket coinvolti:** KCK-214 (pagamento e conferma); KCK-235 (creazione partita); KCK-197 (annullamento); KCK-224, KCK-243 (notifiche); KCK-211 (repository C)

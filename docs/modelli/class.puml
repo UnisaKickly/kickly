@@ -93,7 +93,8 @@ class VotazioneMVP {
   - vincitore: Giocatore [0..1]
 }
 
-' Registra un pagamento o un rimborso e il relativo esito.
+' Registra un pagamento, un rimborso o un accredito e il relativo esito
+' (tipo: pagamento, rimborso, accredito; C19 di CONTROLLO_COERENZA.md).
 class Transazione {
   - tipo: String
   - importo: float
