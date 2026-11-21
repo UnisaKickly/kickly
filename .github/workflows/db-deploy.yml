@@ -1,21 +1,34 @@
 # =============================================================================
-# Deploy database - applica le migration al progetto Supabase
+# Deploy Supabase - applica migration ed Edge Functions al progetto Supabase
 # =============================================================================
-# La CI (ci.yml) prova le migration su un Postgres locale usa e getta, ma non
-# tocca mai il database vero. Questo workflow le applica al progetto Supabase
-# collegato, cosi' il DB resta allineato al codice mergiato (ticket KCK-268).
+# La CI (ci.yml) prova le migration su un Postgres locale usa e getta e testa le
+# Edge Functions con Deno, ma non tocca mai il progetto vero. Questo workflow le
+# pubblica sul progetto Supabase collegato, cosi' database e funzioni restano
+# allineati al codice mergiato (ticket KCK-268 per il DB, KCK-269 per le funzioni).
 #
 # Quando gira:
-#   - a ogni push su `develop` che modifica `supabase/migrations/**`
-#     (cioe' quando una PR con una migration viene mergiata): applica;
-#   - a mano da Actions -> "Deploy database" -> Run workflow: di default fa
-#     solo l'ANTEPRIMA (elenca le migration da applicare, non tocca il DB);
-#     spuntando "applica" le applica davvero. Serve per provare la
-#     configurazione e per rilanciare se un deploy e' caduto.
+#   - a ogni push su `develop` che modifica `supabase/migrations/**` oppure
+#     `supabase/functions/**` (cioe' quando una PR viene mergiata): applica;
+#   - a mano da Actions -> "Deploy Supabase" -> Run workflow: di default fa
+#     solo l'ANTEPRIMA (elenca le migration da applicare e le funzioni da
+#     pubblicare, non tocca niente); spuntando "applica" fa il deploy vero.
+#     Serve per provare la configurazione e per rilanciare se un deploy e' caduto.
 #
 # Cosa fa, in ordine: `supabase link`, anteprima (`db push --dry-run`) e, se
-# deve applicare, `db push`. Non usa MAI `--include-seed` (i dati finti restano
-# solo nel DB locale) ne' `db reset` (cancellerebbe il database remoto).
+# deve applicare, `db push`; poi, se ci sono Edge Functions, `functions deploy`.
+# Le funzioni vanno DOPO le migration: una funzione puo' usare tabelle nuove, e
+# se una migration fallisce il job si ferma prima di pubblicare codice che ne
+# dipende. Non usa MAI `--include-seed` (i dati finti restano solo nel DB
+# locale), ne' `db reset` (cancellerebbe il database remoto), ne' `--prune`
+# (cancellerebbe le funzioni del progetto che non sono nel repository).
+#
+# Le Edge Functions si pubblicano tutte insieme (sono poche). Il controllo del
+# JWT e' attivo di default: per una funzione che deve essere pubblica (es. il
+# webhook di Stripe, che si autentica con la sua firma) si scrive
+# `[functions.<nome>] verify_jwt = false` in `supabase/config.toml`, funzione
+# per funzione. I SECRET delle funzioni (es. la chiave segreta di Stripe) NON
+# passano da qui: si impostano a mano con `supabase secrets set` o dal
+# dashboard di Supabase, mai nel repository ne' in questo workflow.
 #
 # Un solo database: il progetto Supabase e' uno solo (il piano gratuito non
 # permette un secondo progetto ne' il branching), quindi `develop` e `main`
@@ -25,8 +38,10 @@
 # Dove stanno le credenziali (le configurano i PM, una volta sola):
 #   Settings -> Environments -> `supabase-develop`, con Deployment branches =
 #   solo `develop`, e dentro:
-#     - Secret   SUPABASE_ACCESS_TOKEN: token personale Supabase con permessi
-#                `database_write`, `projects_read`, `database_pooling_config_read`;
+#     - Secret   SUPABASE_ACCESS_TOKEN: token personale Supabase. Se e' un
+#                token a permessi limitati servono `database_write`,
+#                `projects_read`, `database_pooling_config_read` e, per le
+#                funzioni, `edge_functions_write`;
 #     - Variable SUPABASE_PROJECT_REF:  l'id del progetto (nell'URL del dashboard).
 #   I valori stanno nell'environment e non nei secret di repository di
 #   proposito: con la restrizione sui branch, chi apre una PR da un suo branch
@@ -37,22 +52,23 @@
 # Non si forza niente: si rinomina il file con `supabase migration new` (data
 # e ora attuali) in una nuova PR. Vedi README, sezione "Migration sul database".
 # =============================================================================
-name: Deploy database
+name: Deploy Supabase
 
 on:
   push:
     branches: [develop]
     paths:
       - "supabase/migrations/**"
+      - "supabase/functions/**"
   workflow_dispatch:
     inputs:
       applica:
-        description: "Applica davvero le migration (se non e' spuntato fa solo l'anteprima)"
+        description: "Applica davvero migration e funzioni (se non e' spuntato fa solo l'anteprima)"
         type: boolean
         default: false
 
-# Un solo deploy alla volta e mai interrotto a meta': due migration applicate
-# in parallelo, o fermate a meta', lascerebbero il DB in uno stato difficile da
+# Un solo deploy alla volta e mai interrotto a meta': due deploy in parallelo,
+# o fermati a meta', lascerebbero database e funzioni in uno stato difficile da
 # capire.
 concurrency:
   group: db-deploy
@@ -64,7 +80,7 @@ permissions:
 
 jobs:
   deploy-db:
-    name: Applica le migration su Supabase
+    name: Applica migration e funzioni su Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Token e progetto vengono dall'environment, che accetta solo il branch
@@ -141,8 +157,50 @@ jobs:
             echo "Solo anteprima: per applicare rilancia il workflow spuntando 'applica'."
           fi
 
+      # Edge Functions (TypeScript/Deno): una cartella per funzione in
+      # `supabase/functions/<nome>/index.ts`. Le cartelle che iniziano con "_"
+      # (es. `_shared`) sono codice condiviso, non funzioni. Se non ce ne sono
+      # (oggi e' cosi') il passo non fa niente.
+      # `--use-api` impacchetta le funzioni lato Supabase, senza Docker.
+      - name: Pubblica le Edge Functions
+        if: steps.config.outputs.pronto == 'true'
+        run: |
+          set -euo pipefail
+
+          riprova() {
+            local n=1
+            until "$@"; do
+              if [ "$n" -ge 3 ]; then
+                echo "::error::Comando fallito dopo 3 tentativi: $1 $2 $3"
+                return 1
+              fi
+              echo "::warning::Tentativo $n fallito, riprovo tra 10 secondi."
+              n=$((n + 1))
+              sleep 10
+            done
+          }
+
+          funzioni=$(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts \
+            -not -path 'supabase/functions/_*' 2>/dev/null \
+            | sed -E 's#supabase/functions/([^/]+)/index.ts#\1#' | sort || true)
+
+          if [ -z "$funzioni" ]; then
+            echo "Nessuna Edge Function da pubblicare."
+            exit 0
+          fi
+
+          echo "Edge Functions nel repository:"
+          echo "$funzioni" | sed 's/^/  - /'
+
+          if [ "$APPLICA" = "true" ]; then
+            riprova supabase functions deploy --use-api --yes
+          else
+            echo "Solo anteprima: per pubblicarle rilancia il workflow spuntando 'applica'."
+          fi
+
       # Controllo finale, in sola lettura: per ogni migration locale mostra se
-      # e' presente anche sul DB remoto (colonna "remote" non vuota).
+      # e' presente anche sul DB remoto (colonna "remote" non vuota). Le
+      # funzioni pubblicate si vedono nel dashboard di Supabase -> Edge Functions.
       - name: Mostra lo stato delle migration
         if: steps.config.outputs.pronto == 'true'
         run: |
