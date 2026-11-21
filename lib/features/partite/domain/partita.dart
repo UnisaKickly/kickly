@@ -54,10 +54,10 @@ abstract final class TipologiaPartita {
 /// Una partita pubblica non appartiene a nessuna lega (associazione 10, CHECK
 /// `partita_pubblica_senza_lega_check`): il vincolo lo controlla il database.
 abstract final class PrivacyPartita {
-  /// Partita visibile anche fuori da una lega.
+  /// Partita che non appartiene a nessuna lega (associazione 10 di class_diagram_sdd.md, CHECK partita_pubblica_senza_lega_check).
   static const pubblica = 'pubblica';
 
-  /// Partita riservata agli invitati o ai membri della lega.
+  /// Partita privata, con o senza lega: le partite di lega sono sempre private.
   static const privata = 'privata';
 
   /// Insieme dei valori ammessi, uguale a quello della CHECK nel database.
