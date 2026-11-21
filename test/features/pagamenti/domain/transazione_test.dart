@@ -4,7 +4,8 @@
 // restituisce Supabase, le chiavi esterne e la data dell'esito facoltative,
 // il rimborso con la transazione originaria, l'importo intero letto come
 // double, la conversione in UTC di una data locale e i valori ammessi delle
-// CHECK della Migration C (D27).
+// CHECK della Migration C (TipoTransazione da class.puml, C19; StatoTransazione
+// da D27).
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kickly/features/pagamenti/domain/transazione.dart';
 

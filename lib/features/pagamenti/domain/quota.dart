@@ -2,7 +2,7 @@
 //
 // Rappresenta la quota individuale dovuta per una partecipazione (una sola
 // per partecipazione, regola 8): importo, stato del versamento e termine.
-// Creazione, importo e termine li decide GestioneTransazioniControl (D25).
+// La crea GestioneTransazioniControl (D25).
 
 /// Valori ammessi per `Quota.statoVersamento` (CHECK
 /// `quota_stato_versamento_check`, D25).
