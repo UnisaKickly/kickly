@@ -24,7 +24,12 @@ CREATE TABLE public.preferenza_voto_mvp (
     votazione_id uuid NOT NULL,
     votante_id uuid NOT NULL,
     votato_id uuid NOT NULL,
-    CONSTRAINT preferenza_voto_mvp_votazione_votante_key UNIQUE (votazione_id, votante_id),
+    -- Un voto per votante nella stessa votazione (regola 6): e' anche la
+    -- chiave primaria della tabella.
+    CONSTRAINT preferenza_voto_mvp_pkey PRIMARY KEY (votazione_id, votante_id),
+    -- D14: l'autovoto non e' ammesso. Il Control mostra l'errore; il CHECK e'
+    -- la seconda difesa nel database.
+    CONSTRAINT preferenza_voto_mvp_no_autovoto_check CHECK (votante_id <> votato_id),
     CONSTRAINT preferenza_voto_mvp_votazione_id_fkey
         FOREIGN KEY (votazione_id) REFERENCES public.votazione_mvp (id) ON DELETE CASCADE,
     CONSTRAINT preferenza_voto_mvp_votante_id_fkey
@@ -101,12 +106,15 @@ COMMENT ON COLUMN public.transazione.stato IS
 COMMENT ON COLUMN public.transazione.riferimento_esterno IS
     'Identificativo testuale esterno usato per l''idempotenza; questa tabella non conserva dati di carta o IBAN.';
 
+-- Un pagamento fallito non ha addebitato nulla: non conta, cosi' il Giocatore
+-- puo' riprovare. Un pagamento in_attesa o completato invece blocca un secondo
+-- addebito della stessa quota (DG2).
 CREATE UNIQUE INDEX transazione_unico_pagamento_quota_idx
     ON public.transazione (quota_id)
-    WHERE tipo = 'pagamento' AND quota_id IS NOT NULL;
+    WHERE tipo = 'pagamento' AND quota_id IS NOT NULL AND stato <> 'fallita';
 
 COMMENT ON INDEX public.transazione_unico_pagamento_quota_idx IS
-    'Garantisce al massimo una transazione di tipo pagamento per ogni Quota (DG2).';
+    'Garantisce al massimo una transazione di pagamento non fallita per ogni Quota (DG2).';
 
 ALTER TABLE public.votazione_mvp ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.preferenza_voto_mvp ENABLE ROW LEVEL SECURITY;

@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(6);
+SELECT plan(8);
 
 -- Un votante puo' registrare una sola preferenza per la stessa votazione.
 SELECT throws_ok(
@@ -85,6 +85,31 @@ SELECT throws_ok(
     '23514',
     NULL,
     'uno stato di transazione non previsto viene rifiutato'
+);
+
+-- D14: un Giocatore non puo' votare se stesso (votante 3 non ha ancora votato).
+SELECT throws_ok(
+    $$INSERT INTO public.preferenza_voto_mvp (votazione_id, votante_id, votato_id)
+      VALUES (
+          '20200000-0000-4000-8000-000000000601',
+          '20200000-0000-4000-8000-000000000003',
+          '20200000-0000-4000-8000-000000000003'
+      )$$,
+    '23514',
+    NULL,
+    'l''autovoto viene rifiutato'
+);
+
+-- DG2: dopo un pagamento fallito sulla quota 802 (nessun addebito) il
+-- Giocatore puo' riprovare con un nuovo pagamento.
+SELECT lives_ok(
+    $$INSERT INTO public.transazione (quota_id, tipo, importo, stato, riferimento_esterno)
+      VALUES
+        ('20200000-0000-4000-8000-000000000802', 'pagamento', 8.00, 'fallita',
+         'evt_kickly_test_pagamento_fallito_802'),
+        ('20200000-0000-4000-8000-000000000802', 'pagamento', 8.00, 'in_attesa',
+         'evt_kickly_test_pagamento_riprova_802')$$,
+    'un pagamento fallito non impedisce di riprovare sulla stessa quota'
 );
 
 SELECT * FROM finish();
