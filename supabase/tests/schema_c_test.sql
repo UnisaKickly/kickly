@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(3);
+SELECT plan(6);
 
 -- Un votante puo' registrare una sola preferenza per la stessa votazione.
 SELECT throws_ok(
@@ -59,6 +59,32 @@ SELECT throws_ok(
     '23505',
     NULL,
     'un secondo pagamento sulla stessa quota viene rifiutato'
+);
+
+-- Valori non ammessi dei campi con CHECK (D27): ogni inserimento deve essere
+-- rifiutato con 23514 (check_violation).
+SELECT throws_ok(
+    $$INSERT INTO public.votazione_mvp (partita_id, stato_votazione, scadenza)
+      VALUES ('20200000-0000-4000-8000-000000000301', 'sospesa', now())$$,
+    '23514',
+    NULL,
+    'uno stato_votazione non previsto viene rifiutato'
+);
+
+SELECT throws_ok(
+    $$INSERT INTO public.notifica (account_id, tipo, messaggio)
+      VALUES ('20200000-0000-4000-8000-000000000002', 'tipo_inventato', 'prova')$$,
+    '23514',
+    NULL,
+    'un tipo di notifica non previsto viene rifiutato'
+);
+
+SELECT throws_ok(
+    $$INSERT INTO public.transazione (tipo, importo, stato, riferimento_esterno)
+      VALUES ('pagamento', 8.00, 'sconosciuto', 'evt_kickly_test_stato_non_valido')$$,
+    '23514',
+    NULL,
+    'uno stato di transazione non previsto viene rifiutato'
 );
 
 SELECT * FROM finish();

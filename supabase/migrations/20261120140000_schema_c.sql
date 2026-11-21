@@ -8,6 +8,8 @@ CREATE TABLE public.votazione_mvp (
     scadenza timestamptz NOT NULL,
     vincitore_id uuid,
     CONSTRAINT votazione_mvp_pkey PRIMARY KEY (id),
+    CONSTRAINT votazione_mvp_stato_votazione_check
+        CHECK (stato_votazione IN ('aperta', 'chiusa')),
     CONSTRAINT votazione_mvp_partita_id_key UNIQUE (partita_id),
     CONSTRAINT votazione_mvp_partita_id_fkey
         FOREIGN KEY (partita_id) REFERENCES public.partita (id) ON DELETE CASCADE,
@@ -16,7 +18,7 @@ CREATE TABLE public.votazione_mvp (
 );
 
 COMMENT ON COLUMN public.votazione_mvp.stato_votazione IS
-    'I valori ammessi sono in attesa di conferma da parte dei PM.';
+    'Valori ammessi (D27): aperta, chiusa.';
 
 CREATE TABLE public.preferenza_voto_mvp (
     votazione_id uuid NOT NULL,
@@ -39,12 +41,14 @@ CREATE TABLE public.notifica (
     stato_lettura boolean NOT NULL DEFAULT false,
     "timestamp" timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT notifica_pkey PRIMARY KEY (id),
+    CONSTRAINT notifica_tipo_check
+        CHECK (tipo IN ('apertura_sondaggio_mvp', 'apertura_convocazioni', 'partita_confermata')),
     CONSTRAINT notifica_account_id_fkey
         FOREIGN KEY (account_id) REFERENCES public.account (id) ON DELETE CASCADE
 );
 
 COMMENT ON COLUMN public.notifica.tipo IS
-    'I valori ammessi sono in attesa di conferma da parte dei PM.';
+    'Valori ammessi (D27): apertura_sondaggio_mvp, apertura_convocazioni, partita_confermata.';
 
 CREATE TABLE public.quota (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -85,13 +89,15 @@ CREATE TABLE public.transazione (
         FOREIGN KEY (gestore_campo_id) REFERENCES public.gestore_campo (account_id) ON DELETE SET NULL,
     CONSTRAINT transazione_originaria_id_fkey
         FOREIGN KEY (transazione_originaria_id) REFERENCES public.transazione (id) ON DELETE SET NULL,
+    CONSTRAINT transazione_stato_check
+        CHECK (stato IN ('in_attesa', 'completata', 'fallita')),
     CONSTRAINT transazione_tipo_check
         CHECK (tipo IN ('pagamento', 'rimborso', 'accredito')),
     CONSTRAINT transazione_importo_check CHECK (importo >= 0)
 );
 
 COMMENT ON COLUMN public.transazione.stato IS
-    'I valori ammessi sono in attesa di conferma da parte dei PM.';
+    'Valori ammessi (D27): in_attesa, completata, fallita.';
 COMMENT ON COLUMN public.transazione.riferimento_esterno IS
     'Identificativo testuale esterno usato per l''idempotenza; questa tabella non conserva dati di carta o IBAN.';
 

@@ -424,7 +424,7 @@ INSERT INTO public.notifica (id, account_id, tipo, messaggio)
 VALUES (
     '20200000-0000-4000-8000-000000000701',
     '20200000-0000-4000-8000-000000000002',
-    'votazione_mvp',
+    'apertura_sondaggio_mvp',
     'La votazione MVP della partita e'' aperta.'
 );
 
