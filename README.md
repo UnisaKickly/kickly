@@ -183,10 +183,10 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
   sul database vero. Token e progetto stanno nell'*environment* `supabase-develop`
   (Settings → Environments, deployment branch = solo `develop`): secret
   `SUPABASE_ACCESS_TOKEN` e variable `SUPABASE_PROJECT_REF`. Si lancia anche a
-  mano da Actions → "Deploy database" (di default solo anteprima). Per `main`
-  esiste lo stesso passo con l'environment `supabase-main`, oggi non
-  configurato perche' c'e' un solo progetto Supabase: finche' mancano i suoi
-  valori il job lo segnala e finisce senza errori.
+  mano da Actions → "Deploy database" (di default solo anteprima). Il database
+  e' uno solo (il piano gratuito di Supabase non permette un secondo progetto
+  ne' il branching): lo aggiorna solo `develop`, la release su `main` non ha
+  nessun passo sul DB.
 - **Dependabot** (`dependabot.yml`): ogni lunedi' propone gli aggiornamenti
   delle action e delle dipendenze Dart; come ogni PR servono CI verde e
   approvazione di un PM.

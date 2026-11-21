@@ -8,8 +8,6 @@
 # Quando gira:
 #   - a ogni push su `develop` che modifica `supabase/migrations/**`
 #     (cioe' quando una PR con una migration viene mergiata): applica;
-#   - a ogni push su `main` che modifica le migration (la release del
-#     mercoledi'): usa l'environment `supabase-main`, vedi sotto;
 #   - a mano da Actions -> "Deploy database" -> Run workflow: di default fa
 #     solo l'ANTEPRIMA (elenca le migration da applicare, non tocca il DB);
 #     spuntando "applica" le applica davvero. Serve per provare la
@@ -19,18 +17,18 @@
 # deve applicare, `db push`. Non usa MAI `--include-seed` (i dati finti restano
 # solo nel DB locale) ne' `db reset` (cancellerebbe il database remoto).
 #
+# Un solo database: il progetto Supabase e' uno solo (il piano gratuito non
+# permette un secondo progetto ne' il branching), quindi `develop` e `main`
+# condividono lo stesso DB e lo aggiorna solo `develop`: la release del
+# mercoledi' non ha nessun passo sul database.
+#
 # Dove stanno le credenziali (le configurano i PM, una volta sola):
-#   Settings -> Environments, un environment per ogni database:
-#     - `supabase-develop`: Deployment branches = solo `develop`;
-#     - `supabase-main`: solo `main`. Serve solo se un giorno ci sara' un
-#       secondo progetto Supabase per la produzione: oggi il progetto e' uno
-#       solo, quindi finche' `supabase-main` non ha i suoi valori i push su
-#       `main` stampano un avviso e finiscono senza errori.
-#   In ciascun environment:
+#   Settings -> Environments -> `supabase-develop`, con Deployment branches =
+#   solo `develop`, e dentro:
 #     - Secret   SUPABASE_ACCESS_TOKEN: token personale Supabase con permessi
 #                `database_write`, `projects_read`, `database_pooling_config_read`;
 #     - Variable SUPABASE_PROJECT_REF:  l'id del progetto (nell'URL del dashboard).
-#   I valori stanno negli environment e non nei secret di repository di
+#   I valori stanno nell'environment e non nei secret di repository di
 #   proposito: con la restrizione sui branch, chi apre una PR da un suo branch
 #   (anche modificando questo file) non puo' leggerli.
 #
@@ -43,7 +41,7 @@ name: Deploy database
 
 on:
   push:
-    branches: [develop, main]
+    branches: [develop]
     paths:
       - "supabase/migrations/**"
   workflow_dispatch:
@@ -53,11 +51,11 @@ on:
         type: boolean
         default: false
 
-# Un solo deploy alla volta per branch e mai interrotto a meta': due migration
-# applicate in parallelo, o fermate a meta', lascerebbero il DB in uno stato
-# difficile da capire.
+# Un solo deploy alla volta e mai interrotto a meta': due migration applicate
+# in parallelo, o fermate a meta', lascerebbero il DB in uno stato difficile da
+# capire.
 concurrency:
-  group: db-deploy-${{ github.ref_name }}
+  group: db-deploy
   cancel-in-progress: false
 
 # Il workflow legge solo il codice: nessun permesso di scrittura sul repository.
@@ -69,8 +67,9 @@ jobs:
     name: Applica le migration su Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Il branch sceglie il database: i valori vengono dall'environment.
-    environment: ${{ github.ref_name == 'main' && 'supabase-main' || 'supabase-develop' }}
+    # Token e progetto vengono dall'environment, che accetta solo il branch
+    # `develop`: lanciato a mano da un altro branch il job non parte.
+    environment: supabase-develop
     # Token e progetto arrivano via env e non vengono scritti nei comandi:
     # cosi' non finiscono nel log. Il riferimento al progetto accetta sia una
     # Variable sia un Secret, per non far sbagliare chi li crea.
