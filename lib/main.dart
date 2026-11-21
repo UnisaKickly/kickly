@@ -5,11 +5,13 @@
 // rotte, feature) vive in `app.dart` o nei moduli sotto `lib/`, cosi' da
 // poterlo testare senza dover lanciare `main()`.
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/persistence/sessione_secure_storage.dart';
+import 'core/provider/autenticazione_provider.dart';
 
 /// Messaggio mostrato quando l'app viene avviata senza `config.json`.
 const String messaggioConfigurazioneMancante =
@@ -48,7 +50,18 @@ Future<void> main() async {
     ),
   );
 
-  runApp(const KicklyApp());
+  // Un solo ProviderContainer per tutta l'app: il router legge la sessione
+  // dall'adattatore e le Boundary leggono AutenticazioneControl dallo stesso
+  // container (KCK-215).
+  final ProviderContainer container = ProviderContainer();
+  runApp(
+    UncontrolledProviderScope(
+      container: container,
+      child: KicklyApp(
+        sessioneProvider: container.read(sessioneAutenticazioneProvider),
+      ),
+    ),
+  );
 }
 
 /// App minimale mostrata quando manca la configurazione di Supabase.

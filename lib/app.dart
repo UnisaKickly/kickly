@@ -1,13 +1,17 @@
 // Widget radice dell'app Kickly (KCK-194).
 //
 // Collega tema e routing condivisi. Contiene anche le schermate segnaposto
-// delle 4 rotte (UI_1, UI_7, UI_2, Dashboard): servono solo a far funzionare la
+// delle rotte ancora senza Boundary vera (UI_1, UI_2, Dashboard): servono solo a far funzionare la
 // navigazione e vanno eliminate da qui quando i ticket dei casi d'uso creano le
 // Boundary vere in lib/features/<sottosistema>/presentation/, altrimenti ci
 // sarebbero due classi con lo stesso nome.
 import 'package:flutter/material.dart';
 
 import 'core/router/app_router.dart';
+
+// FormLogin vera (KCK-215) al posto del segnaposto: l'export la rende
+// visibile a chi importa app.dart, come prima (router e test dell'app shell).
+export 'features/utenza/presentation/form_login.dart' show FormLogin;
 import 'core/theme/tema_kickly.dart';
 
 /// Applica tema e routing condivisi all'app Kickly.
@@ -80,21 +84,6 @@ class SchermataIniziale extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Rappresenta provvisoriamente il punto di ingresso al login.
-///
-/// Segnaposto (UI_7, sostituito dal ticket di RF_ACC_3):
-/// da eliminare quando esiste la Boundary vera.
-class FormLogin extends StatelessWidget {
-  /// Crea il placeholder del form di login.
-  const FormLogin({super.key});
-
-  @override
-  /// Mostra il placeholder destinato al futuro flusso di accesso.
-  Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: Text('Login')));
   }
 }
 
