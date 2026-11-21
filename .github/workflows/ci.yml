@@ -295,6 +295,67 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Serve la storia completa per confrontare le migration della PR con
+          # quelle gia' presenti nel branch di destinazione (passo qui sotto).
+          fetch-depth: 0
+
+      # Regole sulle migration (KCK-269), solo sulle PR. Dal merge in `develop`
+      # il workflow db-deploy.yml le applica al database vero, quindi un errore
+      # qui evita un deploy rosso dopo il merge:
+      #   - il nome del file e' `AAAAMMGGHHMMSS_nome.sql` (lo crea
+      #     `supabase migration new`: il prefisso e' la data e l'ora UTC);
+      #   - ogni migration NUOVA ha un timestamp piu' recente di tutte quelle
+      #     gia' nel branch di destinazione: altrimenti la CLI si rifiuta di
+      #     applicarla (e' il caso di una PR rimasta aperta a lungo);
+      #   - le migration GIA' nel branch non si modificano, rinominano o
+      #     cancellano: sono gia' state applicate al DB, una correzione si fa
+      #     con una migration nuova.
+      - name: Controlla le regole sulle migration
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          base="origin/$BASE_REF"
+
+          # Timestamp piu' recente tra le migration gia' nel branch di
+          # destinazione ("0" se non ce n'e' ancora nessuna).
+          ultima=$(git ls-tree -r --name-only "$base" -- supabase/migrations \
+            | sed 's#.*/##' | grep -oE '^[0-9]{14}' | sort | tail -1 || true)
+          ultima=${ultima:-0}
+          echo "Ultima migration gia' in $BASE_REF: $ultima"
+
+          errori=0
+          # Solo le modifiche della PR (tre punti: dal punto di partenza del
+          # branch). Il separatore e' il tab; per i rename ci sono due percorsi.
+          while IFS=$'\t' read -r stato percorso nuovo; do
+            [ -z "$stato" ] && continue
+            case "$stato" in
+              A)
+                nome=$(basename "$percorso")
+                if ! echo "$nome" | grep -qE '^[0-9]{14}_[a-z0-9_]+\.sql$'; then
+                  echo "::error file=$percorso::Nome non valido: usa 'supabase migration new <nome>' (formato AAAAMMGGHHMMSS_nome.sql, minuscolo)."
+                  errori=1
+                  continue
+                fi
+                ts=${nome:0:14}
+                if [[ ! "$ts" > "$ultima" ]]; then
+                  echo "::error file=$percorso::Il timestamp $ts non e' successivo all'ultima migration gia' in $BASE_REF ($ultima): la CLI la rifiuterebbe al deploy. Rinomina il file con un timestamp nuovo (crea un file con 'supabase migration new' e copiaci il contenuto)."
+                  errori=1
+                fi
+                ;;
+              M|D|R*)
+                echo "::error file=$percorso::Una migration gia' in $BASE_REF non si modifica, rinomina o cancella (stato $stato): e' gia' stata applicata al database. Scrivi una migration nuova per la correzione."
+                errori=1
+                ;;
+            esac
+          done < <(git diff --name-status "$base...HEAD" -- supabase/migrations)
+
+          if [ "$errori" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Migration della PR in regola."
 
       - name: Controlla cosa c'e' da verificare
         id: cosa
@@ -306,11 +367,15 @@ jobs:
 
       # Database: applica tutte le migration su un Postgres locale e lancia i
       # test pgTAP (RLS comprese).
+      # Versione fissata, la stessa di db-deploy.yml, e non `latest`: la 3.x ha
+      # cambiato in silenzio il comportamento di `db push` (senza `--remote`
+      # punta al DB locale), un salto di versione non deve cambiare la CI senza
+      # che ce ne accorgiamo. Per aggiornarla si cambia in entrambi i workflow.
       - name: Installa la CLI di Supabase
         if: steps.cosa.outputs.db == 'true'
         uses: supabase/setup-cli@v3
         with:
-          version: latest
+          version: 3.2.0
 
       - name: Avvia Supabase in locale e applica le migration
         if: steps.cosa.outputs.db == 'true'
