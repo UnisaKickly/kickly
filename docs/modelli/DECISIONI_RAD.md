@@ -234,3 +234,11 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
   * **Notifiche (C20):** alla conferma NotificaControl notifica tutti i Giocatori con Partecipazione `confermata` e il Gestore del Campo (estende C7).
   * **GatewayPagamenti (C21):** e' un'interfaccia del livello Data con `richiediPagamento()` e `disponiAccredito()`, piu' il rimborso di RF_PAG_3 da proporre nel piano di KCK-214; `completaPagamento()` lo fa il Giocatore sulla pagina del fornitore e non e' un metodo.
 * **Ticket coinvolti:** KCK-214 (pagamento e conferma); KCK-235 (creazione partita); KCK-197 (annullamento); KCK-224, KCK-243 (notifiche); KCK-211 (repository C)
+
+---
+
+## D27 – Valori e vincoli dello schema C (votazione MVP, notifica, quota, transazione)
+
+* **Problema:** RAD e class diagram non elencano i valori di `VotazioneMVP.statoVotazione`, `Notifica.tipo` e `Transazione.stato`; la regola 2 di `class_diagram_sdd.md` chiede un CHECK sui valori ammessi (KCK-218).
+* **Decisione:** `statoVotazione` = `aperta` (si apre quando la partita passa a Conclusa, D1), `chiusa` (alla scadenza o a voti completati, con `vincitore` assegnato). `Notifica.tipo` = `apertura_sondaggio_mvp`, `apertura_convocazioni` (RF_NOT_1) e `partita_confermata` (D26, C20); un nuovo tipo si aggiunge con una migration quando un ticket lo richiede. `Transazione.stato` = `in_attesa`, `completata`, `fallita`. `Quota.statoVersamento` resta come in D25. Le tabelle si chiamano `votazione_mvp`, `preferenza_voto_mvp` (la mappa `preferenzeVotanteVotato`, UNIQUE (votazione, votante)), `notifica`, `quota`, `transazione`; al massimo un pagamento per Quota (indice univoco parziale, DG2).
+* **Ticket coinvolti:** KCK-218 (migration C); KCK-211 (repository C); KCK-252 (entity VotazioneMVP, Notifica, Quota, Transazione)

@@ -8,11 +8,18 @@ CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
 SELECT plan(13);
 
--- Seed: tre partite (criterio di accettazione).
+-- Seed: tre partite (criterio di accettazione). Si contano solo quelle della
+-- parte B: la parte C del seed (KCK-218) aggiunge una partita conclusa e il
+-- criterio di KCK-210 riguarda le tre partite dello schema B.
 SELECT is(
-    (SELECT count(*)::integer FROM public.partita),
+    (SELECT count(*)::integer FROM public.partita
+      WHERE id IN (
+          '20200000-0000-4000-8000-000000000301',
+          '20200000-0000-4000-8000-000000000302',
+          '20200000-0000-4000-8000-000000000303'
+      )),
     3,
-    'il seed contiene 3 partite'
+    'il seed contiene le 3 partite della parte B'
 );
 
 -- Partite di appoggio, senza prenotazione, per provare gli slot.
