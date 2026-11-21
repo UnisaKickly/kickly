@@ -101,17 +101,35 @@ class AutenticazioneControl {
       rethrow;
     }
 
-    final Account? account = await _accountRepository.findById(idAccount);
+    final Account? account;
+    try {
+      account = await _accountRepository.findById(idAccount);
+    } on Object {
+      // Senza i dati dell'account il login non e' riuscito: si chiude la
+      // sessione appena aperta, cosi' l'app non resta autenticata.
+      await _chiudiSessioneSenzaErrori();
+      rethrow;
+    }
     if (account == null) {
       // Utente autenticato senza riga in `account`: non dovrebbe succedere
       // (la crea il trigger della migration A). Si chiude la sessione per
       // non lasciare l'app autenticata senza dati.
-      await _accountRepository.esci();
+      await _chiudiSessioneSenzaErrori();
       throw AppException.unexpected(
         originalError: StateError('Account $idAccount non trovato.'),
       );
     }
     return account;
+  }
+
+  /// Chiude la sessione dopo un login non completato; un errore della
+  /// chiusura non deve nascondere quello del login.
+  Future<void> _chiudiSessioneSenzaErrori() async {
+    try {
+      await _accountRepository.esci();
+    } on Object {
+      // Ignorato di proposito: si rilancia l'errore del login.
+    }
   }
 
   /// Chiude la sessione: per accedere di nuovo servono le credenziali

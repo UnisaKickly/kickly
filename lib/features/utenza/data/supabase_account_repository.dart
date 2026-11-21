@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -114,9 +116,14 @@ class SupabaseAccountRepository implements AccountRepository {
       // una sottoclasse di AuthException, ma non un rifiuto delle credenziali.
       throw AppException.network(originalError: error, stackTrace: stackTrace);
     } on AuthException catch (error, stackTrace) {
-      // Ogni altro rifiuto di Supabase Auth (email non registrata o password
-      // errata) diventa lo stesso codice: il Control mostra un unico
-      // messaggio e non rivela quali email sono registrate (D16).
+      // Solo il rifiuto delle credenziali (email non registrata o password
+      // errata: Supabase Auth risponde con lo stesso `invalid_credentials`)
+      // diventa questo codice, cosi' il Control mostra un unico messaggio e
+      // non rivela quali email sono registrate (D16). Rate limit, errori del
+      // servizio o altri rifiuti seguono la traduzione comune.
+      if (!_credenzialiRifiutate(error)) {
+        throw translateSupabaseError(error, stackTrace: stackTrace);
+      }
       throw AppException(
         message: 'Email o password non corretti',
         code: AccountRepository.codiceCredenzialiNonValide,
@@ -138,9 +145,32 @@ class SupabaseAccountRepository implements AccountRepository {
   Stream<String?> cambiamentiAutenticazione() {
     // Ogni evento di Supabase Auth (signedIn, signedOut, tokenRefreshed...)
     // si riduce all'id dell'utente della sessione, o null senza sessione.
-    return _client.auth.onAuthStateChange.map(
-      (AuthState stato) => stato.session?.user.id,
-    );
+    // Gli errori dell'SDK sullo stream (es. rinnovo del token fallito) si
+    // traducono in AppException (DG9); distinct evita di riemettere lo
+    // stesso id a ogni rinnovo del token.
+    return _client.auth.onAuthStateChange
+        .map((AuthState stato) => stato.session?.user.id)
+        .transform(
+          StreamTransformer<String?, String?>.fromHandlers(
+            handleError: (Object error, StackTrace stackTrace, sink) =>
+                sink.addError(
+                  translateSupabaseError(error, stackTrace: stackTrace),
+                  stackTrace,
+                ),
+          ),
+        )
+        .distinct();
+  }
+
+  /// Dice se Supabase Auth ha rifiutato email e password.
+  ///
+  /// Supabase Auth risponde 400 con codice `invalid_credentials`; le versioni
+  /// che non mandano il codice usano solo lo stato 400.
+  bool _credenzialiRifiutate(AuthException error) {
+    if (error.code != null) {
+      return error.code == 'invalid_credentials';
+    }
+    return error.statusCode == '400';
   }
 
   @override

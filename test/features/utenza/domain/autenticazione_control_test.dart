@@ -8,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kickly/core/errors/app_exception.dart';
 import 'package:kickly/features/utenza/data/in_memory_account_repository.dart';
 import 'package:kickly/features/utenza/domain/account.dart';
-import 'package:kickly/features/utenza/domain/account_repository.dart';
 import 'package:kickly/features/utenza/domain/autenticazione_control.dart';
 
 /// Repository che simula un errore di rete del servizio di autenticazione.
@@ -16,6 +15,12 @@ class _RepositorySenzaRete extends InMemoryAccountRepository {
   @override
   Future<String> accedi(String email, String password) async =>
       throw AppException.network();
+}
+
+/// Repository che autentica ma non riesce a leggere i dati dell'account.
+class _RepositoryLetturaFallita extends InMemoryAccountRepository {
+  @override
+  Future<Account?> findById(String id) async => throw AppException.network();
 }
 
 void main() {
@@ -181,10 +186,22 @@ void main() {
     );
   });
 
-  test('il codice delle credenziali rifiutate e\' quello approvato', () {
-    expect(
-      AccountRepository.codiceCredenzialiNonValide,
-      'credenziali_non_valide',
+  test('se la lettura dell account fallisce la sessione si chiude', () async {
+    // Preparazione: credenziali corrette, ma i dati dell'account non si
+    // leggono (rete).
+    // Esito atteso: il login fallisce con l'errore di rete e l'app non resta
+    // autenticata.
+    final repositoryGuasto = _RepositoryLetturaFallita();
+    await repositoryGuasto.createAccount(account);
+    repositoryGuasto.impostaPassword(email, password);
+    final AutenticazioneControl controlGuasto = AutenticazioneControl(
+      accountRepository: repositoryGuasto,
     );
+
+    await expectLater(
+      controlGuasto.login(email, password),
+      throwsA(isA<AppException>().having((e) => e.code, 'code', 'network')),
+    );
+    expect(controlGuasto.autenticato, isFalse);
   });
 }

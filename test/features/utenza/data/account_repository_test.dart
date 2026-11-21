@@ -433,6 +433,28 @@ void main() {
       },
     );
 
+    test(
+      'un rate limit di Supabase Auth non diventa credenziali_non_valide',
+      () async {
+        final risultato = await _withAccountSupabase<Object?>(
+          (repository) => repository
+              .accedi('mario@example.com', 'PasswordFittizia1!')
+              .then<Object?>((_) => null, onError: (Object error) => error),
+          (request) => _RestServer().respond(request, 429, <String, Object?>{
+            'code': 429,
+            'error_code': 'over_request_rate_limit',
+            'msg': 'Request rate limit reached',
+          }),
+        );
+
+        expect(risultato, isA<AppException>());
+        expect(
+          (risultato as AppException).code,
+          isNot(AccountRepository.codiceCredenzialiNonValide),
+        );
+      },
+    );
+
     test('senza login non c e\' un account autenticato', () async {
       final risultato = await _withAccountSupabase<String?>(
         (repository) async => repository.idAccountAutenticato(),
