@@ -116,12 +116,19 @@ Per scrivere una migration nuova:
    migration piu' recente sia entrata in `develop`: una migration con un
    timestamp **precedente** all'ultima gia' applicata viene rifiutata e il
    deploy fallisce. In quel caso si rinomina il file con un timestamp nuovo
-   (con `supabase migration new`) prima di rifare il merge.
+   (con `supabase migration new`) prima di rifare il merge. La CI lo controlla
+   da sola sulle PR (passo "Controlla le regole sulle migration"): se e' rossa
+   per questo motivo, l'errore dice quale file correggere.
 
 Regole da non rompere:
 
 - **Mai modificare una migration gia' applicata**: se serve una correzione si
-  scrive una migration nuova.
+  scrive una migration nuova. La CI fa fallire una PR che modifica, rinomina o
+  cancella una migration gia' presente in `develop`.
+- **Ogni tabella di `public` ha la RLS attiva**
+  (`ALTER TABLE public.<nome> ENABLE ROW LEVEL SECURITY;` nella migration che
+  la crea): il test `supabase/tests/rls_attiva_test.sql` fa fallire la CI se
+  ne manca una.
 - **Mai `supabase db reset` sul database remoto**: cancella tutto.
 - **Mai i dati finti (`seed.sql`) sul remoto**: il seed e' solo per il database
   locale; `db push` non lo carica (non usare `--include-seed`).
@@ -136,7 +143,7 @@ supabase db push --remote             # le applica, chiedendo conferma
 ```
 
 `--remote` e' obbligatorio: dalla CLI 3.x senza di esso il comando punta al
-database locale. In alternativa, da GitHub: Actions → **Deploy database** →
+database locale. In alternativa, da GitHub: Actions → **Deploy Supabase** →
 Run workflow (spuntando "applica" le applica davvero).
 
 ## Comandi utili
@@ -183,7 +190,7 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
   sul database vero. Token e progetto stanno nell'*environment* `supabase-develop`
   (Settings → Environments, deployment branch = solo `develop`): secret
   `SUPABASE_ACCESS_TOKEN` e variable `SUPABASE_PROJECT_REF`. Si lancia anche a
-  mano da Actions → "Deploy database" (di default solo anteprima). Il database
+  mano da Actions → "Deploy Supabase" (di default solo anteprima). Il database
   e' uno solo (il piano gratuito di Supabase non permette un secondo progetto
   ne' il branching): lo aggiorna solo `develop`, la release su `main` non ha
   nessun passo sul DB.
