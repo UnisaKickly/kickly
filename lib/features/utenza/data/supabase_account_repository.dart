@@ -94,6 +94,56 @@ class SupabaseAccountRepository implements AccountRepository {
   }
 
   @override
+  Future<String> accedi(String email, String password) async {
+    try {
+      final AuthResponse risposta = await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      final String? id = risposta.user?.id;
+      if (id == null) {
+        // Supabase Auth ha risposto senza utente: non e' un rifiuto delle
+        // credenziali, quindi non si mostra "Email o password non corretti".
+        throw AppException.unexpected(
+          originalError: StateError('Login senza utente nella risposta.'),
+        );
+      }
+      return id;
+    } on AuthRetryableFetchException catch (error, stackTrace) {
+      // Il client Auth segnala cosi' i problemi di rete o del servizio: e'
+      // una sottoclasse di AuthException, ma non un rifiuto delle credenziali.
+      throw AppException.network(originalError: error, stackTrace: stackTrace);
+    } on AuthException catch (error, stackTrace) {
+      // Ogni altro rifiuto di Supabase Auth (email non registrata o password
+      // errata) diventa lo stesso codice: il Control mostra un unico
+      // messaggio e non rivela quali email sono registrate (D16).
+      throw AppException(
+        message: 'Email o password non corretti',
+        code: AccountRepository.codiceCredenzialiNonValide,
+        originalError: error,
+        stackTrace: stackTrace,
+      );
+    } catch (error, stackTrace) {
+      throw translateSupabaseError(error, stackTrace: stackTrace);
+    }
+  }
+
+  @override
+  Future<void> esci() => _execute(() => _client.auth.signOut());
+
+  @override
+  String? idAccountAutenticato() => _client.auth.currentUser?.id;
+
+  @override
+  Stream<String?> cambiamentiAutenticazione() {
+    // Ogni evento di Supabase Auth (signedIn, signedOut, tokenRefreshed...)
+    // si riduce all'id dell'utente della sessione, o null senza sessione.
+    return _client.auth.onAuthStateChange.map(
+      (AuthState stato) => stato.session?.user.id,
+    );
+  }
+
+  @override
   Future<Account?> findById(String id) => _findSingle('id', id);
 
   @override

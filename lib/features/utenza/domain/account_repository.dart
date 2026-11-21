@@ -7,6 +7,30 @@ import 'giocatore.dart';
 /// L'interfaccia appartiene al Domain Layer e non dipende da Supabase o da
 /// altri SDK, così il Control può usare implementazioni diverse.
 abstract interface class AccountRepository {
+  /// Codice dell'AppException lanciata da [accedi] quando il servizio di
+  /// autenticazione rifiuta email e password (KCK-208, risposta dei PM).
+  static const codiceCredenzialiNonValide = 'credenziali_non_valide';
+
+  /// Autentica l'utente con le credenziali della registrazione (RF_ACC_3) e
+  /// restituisce l'id del suo account.
+  ///
+  /// Se le credenziali sono rifiutate lancia un'AppException con codice
+  /// [codiceCredenzialiNonValide]; gli altri errori (es. rete) restano
+  /// AppException con il proprio codice. La password non viene salvata: passa
+  /// solo al servizio di autenticazione (class_diagram_sdd.md §3, regola 2).
+  Future<String> accedi(String email, String password);
+
+  /// Chiude la sessione dell'utente autenticato (logout, RF_ACC_3).
+  Future<void> esci();
+
+  /// Restituisce l'id dell'account con una sessione aperta, o null se nessun
+  /// utente e' autenticato.
+  String? idAccountAutenticato();
+
+  /// Emette l'id dell'account autenticato a ogni cambio di sessione (login,
+  /// logout, sessione chiusa dal servizio); null quando non c'e' sessione.
+  Stream<String?> cambiamentiAutenticazione();
+
   /// Cerca un account e restituisce la specializzazione eventualmente presente.
   Future<Account?> findById(String id);
 

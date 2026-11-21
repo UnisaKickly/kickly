@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
+import 'core/persistence/sessione_secure_storage.dart';
 
 /// Messaggio mostrato quando l'app viene avviata senza `config.json`.
 const String messaggioConfigurazioneMancante =
@@ -37,7 +38,15 @@ Future<void> main() async {
   // Nota: da supabase_flutter 2.18 il parametro `anonKey` e' deprecato e si
   // chiama `publishableKey`; il valore e' lo stesso (la chiave anon /
   // publishable del dashboard), mai la chiave secret / service_role.
-  await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
+  // La sessione di login si salva nel Secure Storage del sistema operativo e
+  // non in SharedPreferences, che e' il default (SDD, deployment; KCK-208).
+  await Supabase.initialize(
+    url: supabaseUrl,
+    publishableKey: supabaseAnonKey,
+    authOptions: FlutterAuthClientOptions(
+      localStorage: SessioneSecureStorage(),
+    ),
+  );
 
   runApp(const KicklyApp());
 }

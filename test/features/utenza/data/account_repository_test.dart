@@ -6,6 +6,7 @@ import 'package:kickly/core/errors/app_exception.dart';
 import 'package:kickly/features/utenza/data/supabase_account_repository.dart';
 import 'package:kickly/features/utenza/data/in_memory_account_repository.dart';
 import 'package:kickly/features/utenza/domain/account.dart';
+import 'package:kickly/features/utenza/domain/account_repository.dart';
 import 'package:kickly/features/utenza/domain/gestore_campo.dart';
 import 'package:kickly/features/utenza/domain/giocatore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -296,5 +297,149 @@ void main() {
 
     expect(result, isA<AppException>());
     expect((result as AppException).code, '23503');
+  });
+
+  // KCK-208: metodi di autenticazione di AccountRepository.
+  group('autenticazione in memoria', () {
+    test('accedi apre la sessione ed esci la chiude', () async {
+      final repository = InMemoryAccountRepository();
+      await repository.createAccount(account);
+      repository.impostaPassword('mario@example.com', 'PasswordFittizia1!');
+      final eventi = <String?>[];
+      final sottoscrizione = repository.cambiamentiAutenticazione().listen(
+        eventi.add,
+      );
+      addTearDown(sottoscrizione.cancel);
+
+      final id = await repository.accedi(
+        'mario@example.com',
+        'PasswordFittizia1!',
+      );
+      expect(id, 'account-1');
+      expect(repository.idAccountAutenticato(), 'account-1');
+
+      await repository.esci();
+      await Future<void>.delayed(Duration.zero);
+      expect(repository.idAccountAutenticato(), isNull);
+      expect(eventi, <String?>['account-1', null]);
+    });
+
+    test(
+      'accedi con credenziali errate lancia credenziali_non_valide',
+      () async {
+        final repository = InMemoryAccountRepository();
+        await repository.createAccount(account);
+        repository.impostaPassword('mario@example.com', 'PasswordFittizia1!');
+
+        for (final credenziali in <List<String>>[
+          <String>['mario@example.com', 'sbagliata'],
+          <String>['nessuno@example.com', 'PasswordFittizia1!'],
+        ]) {
+          await expectLater(
+            repository.accedi(credenziali[0], credenziali[1]),
+            throwsA(
+              isA<AppException>().having(
+                (e) => e.code,
+                'code',
+                AccountRepository.codiceCredenzialiNonValide,
+              ),
+            ),
+          );
+        }
+        expect(repository.idAccountAutenticato(), isNull);
+      },
+    );
+  });
+
+  group('autenticazione Supabase', () {
+    // Risposta di Supabase Auth a un login riuscito (dati fittizi).
+    Map<String, Object?> sessione(String idUtente) => <String, Object?>{
+      'access_token': 'token-fittizio',
+      'token_type': 'bearer',
+      'expires_in': 3600,
+      'expires_at':
+          DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+          1000,
+      'refresh_token': 'refresh-fittizio',
+      'user': <String, Object?>{
+        'id': idUtente,
+        'aud': 'authenticated',
+        'email': 'mario@example.com',
+        'app_metadata': <String, Object?>{},
+        'user_metadata': <String, Object?>{},
+        'created_at': '2026-11-21T10:00:00Z',
+      },
+    };
+
+    test(
+      'accedi chiama signInWithPassword e restituisce l id utente',
+      () async {
+        final percorsi = <String>[];
+        final risultato = await _withAccountSupabase<List<Object?>>(
+          (repository) async {
+            final eventi = <String?>[];
+            final sottoscrizione = repository
+                .cambiamentiAutenticazione()
+                .listen(eventi.add);
+            final id = await repository.accedi(
+              'mario@example.com',
+              'PasswordFittizia1!',
+            );
+            final idCorrente = repository.idAccountAutenticato();
+            await repository.esci();
+            final idDopoUscita = repository.idAccountAutenticato();
+            await Future<void>.delayed(Duration.zero);
+            await sottoscrizione.cancel();
+            return <Object?>[id, idCorrente, idDopoUscita, eventi];
+          },
+          (request) async {
+            percorsi.add('${request.method} ${request.uri.path}');
+            if (request.uri.path == '/auth/v1/token') {
+              await _RestServer().respond(request, 200, sessione('account-1'));
+            } else {
+              await _RestServer().respondEmpty(request, 204);
+            }
+          },
+        );
+
+        expect(risultato[0], 'account-1');
+        expect(risultato[1], 'account-1');
+        expect(risultato[2], isNull);
+        expect(risultato[3], containsAllInOrder(<String?>['account-1', null]));
+        expect(percorsi, contains('POST /auth/v1/token'));
+        expect(percorsi, contains('POST /auth/v1/logout'));
+      },
+    );
+
+    test(
+      'accedi traduce il rifiuto di Supabase Auth in credenziali_non_valide',
+      () async {
+        final risultato = await _withAccountSupabase<Object?>(
+          (repository) => repository
+              .accedi('mario@example.com', 'sbagliata')
+              .then<Object?>((_) => null, onError: (Object error) => error),
+          (request) => _RestServer().respond(request, 400, <String, Object?>{
+            'code': 400,
+            'error_code': 'invalid_credentials',
+            'msg': 'Invalid login credentials',
+          }),
+        );
+
+        expect(risultato, isA<AppException>());
+        expect(
+          (risultato as AppException).code,
+          AccountRepository.codiceCredenzialiNonValide,
+        );
+      },
+    );
+
+    test('senza login non c e\' un account autenticato', () async {
+      final risultato = await _withAccountSupabase<String?>(
+        (repository) async => repository.idAccountAutenticato(),
+        (request) => _RestServer().respondEmpty(request, 204),
+      );
+
+      expect(risultato, isNull);
+    });
   });
 }
