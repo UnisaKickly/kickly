@@ -84,6 +84,9 @@ a realizzare il diagramma su Supabase senza aggiungere elementi al modello.
 6. **`VotazioneMVP.preferenzeVotanteVotato`** (mappa votante -> votato) e' una
    tabella (votazione, votante, votato) con UNIQUE (votazione, votante);
    `vincitore` e' una chiave esterna facoltativa verso Giocatore.
+   In Dart `preferenzeVotanteVotato` non e' un attributo dell'entity
+   VotazioneMVP: la tabella `preferenza_voto_mvp` la gestisce
+   VotazioneMVPRepository, come `membro_lega` e `amministratore_lega` per Lega.
 7. **Idempotenza dei pagamenti**: `Transazione.riferimentoEsterno` (id
    dell'evento del fornitore) e' UNIQUE. Nessuna colonna in piu'.
 8. **Chiavi esterne dalle molteplicita'**: lato "1" = NOT NULL, lato "0..1" =
