@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/provider/autenticazione_provider.dart';
 import '../domain/autenticazione_control.dart';
+import 'stile_mockup.dart';
 
 /// Impostazioni dell'account con il comando di logout.
 class ImpostazioniAccount extends StatefulWidget {
@@ -59,8 +60,16 @@ class _ImpostazioniAccountState extends State<ImpostazioniAccount> {
   }
 
   @override
-  /// Costruisce la schermata: titolo, card con il comando Esci ed errore.
+  /// Applica lo stile dei mock-up del RAD (sfondo nero, accento #CAFF00).
   Widget build(BuildContext context) {
+    return Theme(
+      data: temaMockup(),
+      child: Builder(builder: _costruisci),
+    );
+  }
+
+  /// Costruisce la schermata: titolo, card con il comando Esci ed errore.
+  Widget _costruisci(BuildContext context) {
     final ThemeData tema = Theme.of(context);
 
     return Scaffold(

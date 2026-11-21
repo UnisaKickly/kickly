@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/provider/autenticazione_provider.dart';
 import '../domain/autenticazione_control.dart';
+import 'stile_mockup.dart';
 
 /// Schermata di accesso con email e password (UI_7).
 class FormLogin extends StatefulWidget {
@@ -95,8 +96,16 @@ class _FormLoginState extends State<FormLogin> {
   }
 
   @override
-  /// Costruisce UI_7: istruzioni, card con i campi, link e pulsante Accedi.
+  /// Applica lo stile dei mock-up del RAD (sfondo nero, accento #CAFF00).
   Widget build(BuildContext context) {
+    return Theme(
+      data: temaMockup(),
+      child: Builder(builder: _costruisci),
+    );
+  }
+
+  /// Costruisce UI_7: istruzioni, card con i campi, link e pulsante Accedi.
+  Widget _costruisci(BuildContext context) {
     final ThemeData tema = Theme.of(context);
 
     return Scaffold(
