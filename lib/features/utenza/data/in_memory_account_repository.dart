@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import '../../../core/errors/app_exception.dart';
 import '../domain/account.dart';
 import '../domain/account_repository.dart';
 import '../domain/gestore_campo.dart';
@@ -10,6 +13,52 @@ class InMemoryAccountRepository implements AccountRepository {
 
   final Map<String, Account> _accounts = {};
   int _nextId = 1;
+
+  /// Password fittizie per email, al posto di Supabase Auth.
+  final Map<String, String> _password = {};
+
+  /// Id dell'account con la sessione aperta, null se nessuno e' autenticato.
+  String? _idAutenticato;
+
+  /// Avvisa gli ascoltatori a ogni login o logout simulato.
+  final StreamController<String?> _cambiamenti =
+      StreamController<String?>.broadcast();
+
+  /// Registra la password di un'email per i test di login.
+  ///
+  /// Non fa parte di AccountRepository: nel sistema vero le credenziali le
+  /// crea Supabase Auth in registrazione (KCK-250).
+  void impostaPassword(String email, String password) {
+    _password[email] = password;
+  }
+
+  @override
+  Future<String> accedi(String email, String password) async {
+    final Account? account = await findByEmail(email);
+    // Email non registrata e password errata danno lo stesso errore, come
+    // Supabase Auth (D16).
+    if (account == null || _password[email] != password) {
+      throw AppException(
+        message: 'Email o password non corretti',
+        code: AccountRepository.codiceCredenzialiNonValide,
+      );
+    }
+    _idAutenticato = account.id;
+    _cambiamenti.add(account.id);
+    return account.id;
+  }
+
+  @override
+  Future<void> esci() async {
+    _idAutenticato = null;
+    _cambiamenti.add(null);
+  }
+
+  @override
+  String? idAccountAutenticato() => _idAutenticato;
+
+  @override
+  Stream<String?> cambiamentiAutenticazione() => _cambiamenti.stream;
 
   /// Genera un UUID fittizio stabile senza dipendenze esterne.
   String _generateId() {
