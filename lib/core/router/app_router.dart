@@ -3,12 +3,13 @@
 // Il router decide quale schermata mostrare in base allo stato della sessione,
 // letto da un'interfaccia SessioneProvider: cosi' non dipende da nessun SDK
 // esterno (DG9 Portabilita' e modificabilita', SDD v1.4 §1.2) e nei test si
-// usa una sessione finta. L'implementazione vera la fornira'
-// AutenticazioneControl (RF_ACC_3).
+// usa una sessione finta. L'implementazione vera e' SessioneAutenticazione
+// (lib/core/provider/autenticazione_provider.dart), sopra AutenticazioneControl.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../features/utenza/presentation/impostazioni_account.dart';
 
 /// Espone lo stato minimo di autenticazione richiesto dal router.
 ///
@@ -51,8 +52,11 @@ class AppRouter {
         initialLocation: '/',
         refreshListenable: sessioneProvider,
         redirect: (BuildContext context, GoRouterState state) {
+          // Le impostazioni dell'account (logout, KCK-215) sono solo per chi
+          // e' autenticato, come la dashboard.
           final bool nellaZonaAutenticata =
-              state.matchedLocation == '/dashboard';
+              state.matchedLocation == '/dashboard' ||
+              state.matchedLocation == '/impostazioni-account';
           // Schermata iniziale e login non servono a chi e' gia' autenticato:
           // dopo il login (RF_ACC_3, UI_7 -> Dashboard) si va alla dashboard.
           // La registrazione e' esclusa perche' dopo di essa l'onboarding di
@@ -85,6 +89,11 @@ class AppRouter {
             path: '/registrazione',
             builder: (BuildContext context, GoRouterState state) =>
                 const FormRegistrazione(),
+          ),
+          GoRoute(
+            path: '/impostazioni-account',
+            builder: (BuildContext context, GoRouterState state) =>
+                const ImpostazioniAccount(),
           ),
           GoRoute(
             path: '/dashboard',
