@@ -92,9 +92,52 @@ supabase login
 supabase link --project-ref zwnmtoygwwiajffufqqc
 ```
 
-Se `supabase link` chiede la password del database, chiedila a un PM. URL,
+Con la CLI 3.x `supabase link` di solito non chiede la password del database
+(usa l'accesso del tuo `supabase login`); se la chiede, chiedila a un PM. URL,
 chiavi e password si condividono solo su un canale privato (es. gestore di
 password del team): mai nel repo, nei commit, nelle PR o su Jira.
+
+### Migration sul database
+
+Le migration (`supabase/migrations/`) si applicano **da sole** al progetto
+Supabase `kickly` quando una PR che le tocca viene mergiata in `develop`
+(workflow `db-deploy.yml`, vedi "CI/CD e rilasci"). Non serve fare niente a mano.
+
+Per scrivere una migration nuova:
+
+1. parti da `develop` aggiornato e crea il file con
+   `supabase migration new <nome>`: il prefisso del nome e' la data e l'ora UTC
+   di adesso, quindi e' piu' recente di tutte quelle gia' presenti. Non
+   inventare il prefisso a mano;
+2. prova tutto in locale (serve Docker acceso): `supabase start`,
+   `supabase db reset` (applica migration e seed) e `supabase test db` (test
+   pgTAP);
+3. se la PR resta aperta a lungo, controlla prima del merge che nessun'altra
+   migration piu' recente sia entrata in `develop`: una migration con un
+   timestamp **precedente** all'ultima gia' applicata viene rifiutata e il
+   deploy fallisce. In quel caso si rinomina il file con un timestamp nuovo
+   (con `supabase migration new`) prima di rifare il merge.
+
+Regole da non rompere:
+
+- **Mai modificare una migration gia' applicata**: se serve una correzione si
+  scrive una migration nuova.
+- **Mai `supabase db reset` sul database remoto**: cancella tutto.
+- **Mai i dati finti (`seed.sql`) sul remoto**: il seed e' solo per il database
+  locale; `db push` non lo carica (non usare `--include-seed`).
+
+Se serve applicare a mano (per esempio perche' un deploy e' caduto), con la CLI
+**3.x o superiore** (`brew upgrade supabase`), da `develop` aggiornato e dopo
+`supabase link`:
+
+```bash
+supabase db push --remote --dry-run   # anteprima: elenca le migration da applicare
+supabase db push --remote             # le applica, chiedendo conferma
+```
+
+`--remote` e' obbligatorio: dalla CLI 3.x senza di esso il comando punta al
+database locale. In alternativa, da GitHub: Actions → **Deploy database** →
+Run workflow (spuntando "applica" le applica davvero).
 
 ## Comandi utili
 
@@ -133,6 +176,17 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
   Release. Usa i *Secrets* di repository `SUPABASE_URL` e `SUPABASE_ANON_KEY`
   (Settings → Secrets and variables → Actions → Secrets): senza, l'app
   pubblicata mostra "Configurazione mancante".
+- **Deploy del database** (`db-deploy.yml`): a ogni merge in `develop` che tocca
+  `supabase/migrations/**` applica le migration al progetto Supabase `kickly`
+  (`supabase link` + `supabase db push --remote`, senza seed). La CI le prova
+  solo su un database locale usa e getta: questo workflow e' l'unico che scrive
+  sul database vero. Token e progetto stanno nell'*environment* `supabase-develop`
+  (Settings → Environments, deployment branch = solo `develop`): secret
+  `SUPABASE_ACCESS_TOKEN` e variable `SUPABASE_PROJECT_REF`. Si lancia anche a
+  mano da Actions → "Deploy database" (di default solo anteprima). Il database
+  e' uno solo (il piano gratuito di Supabase non permette un secondo progetto
+  ne' il branching): lo aggiorna solo `develop`, la release su `main` non ha
+  nessun passo sul DB.
 - **Dependabot** (`dependabot.yml`): ogni lunedi' propone gli aggiornamenti
   delle action e delle dipendenze Dart; come ogni PR servono CI verde e
   approvazione di un PM.
