@@ -28,13 +28,19 @@ abstract interface class VotazioneMVPRepository {
 
   /// Aggiorna il vincitore della votazione.
   ///
-  /// In produzione la modifica e' protetta dalle policy RLS C ed e' destinata
-  /// all'esecuzione lato server dalle procedure che determinano il vincitore.
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `votazione_mvp`; eventuali scritture dirette da
+  /// client restituiscono errore `42501`. Questo metodo e' pensato
+  /// esclusivamente per l'esecuzione lato server / Edge Functions con service
+  /// role oppure per testare i Control tramite `InMemoryVotazioneMVPRepository`.
   Future<void> updateVincitore(String votazioneId, String? vincitoreId);
 
   /// Aggiorna lo stato della votazione.
   ///
-  /// In produzione la modifica e' protetta dalle policy RLS C ed e' destinata
-  /// all'esecuzione lato server dalle procedure che aprono o chiudono il voto.
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `votazione_mvp`; eventuali scritture dirette da
+  /// client restituiscono errore `42501`. Questo metodo e' pensato
+  /// esclusivamente per l'esecuzione lato server / Edge Functions con service
+  /// role oppure per testare i Control tramite `InMemoryVotazioneMVPRepository`.
   Future<void> updateStato(String votazioneId, String statoVotazione);
 }

@@ -9,6 +9,15 @@ abstract interface class QuotaRepository {
   /// Cerca una quota tramite la sua chiave.
   Future<Quota?> findById(String id);
 
+  /// Legge una quota tramite la sua chiave, come `findById`.
+  ///
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `quota`; eventuali operazioni di scrittura
+  /// restituiscono errore `42501`.
+  /// Questo metodo e' pensato per lettura lato client ed Edge Functions con
+  /// service role.
+  Future<Quota?> leggiQuota(String quotaId);
+
   /// Cerca l'unica quota associata alla partecipazione indicata.
   Future<Quota?> findByPartecipazione(String partecipazioneId);
 
@@ -20,20 +29,38 @@ abstract interface class QuotaRepository {
 
   /// Crea una quota con l'importo e il termine stabiliti dal Control.
   ///
-  /// In produzione la scrittura e' vincolata dalle policy RLS C e dalle Edge
-  /// Functions per preservare i vincoli di sicurezza DG1 e DG2.
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `quota`; eventuali scritture dirette da client
+  /// restituiscono errore `42501`. Questo metodo e' pensato esclusivamente
+  /// per l'esecuzione lato server / Edge Functions con service role oppure per
+  /// testare i Control tramite implementazioni `InMemoryQuotaRepository`.
   Future<Quota> createQuota(Quota quota);
 
   /// Aggiorna lo stato di versamento della quota indicata.
   ///
-  /// In produzione il passaggio a versata, rimborsata o da_versare e' vincolato
-  /// dalle policy RLS C e dalle Edge Functions per DG1 e DG2.
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `quota`; eventuali scritture dirette da client
+  /// restituiscono errore `42501`. Questo metodo e' pensato esclusivamente
+  /// per l'esecuzione lato server / Edge Functions con service role oppure per
+  /// testare i Control tramite implementazioni `InMemoryQuotaRepository`.
   Future<void> updateStatoVersamento(String id, String statoVersamento);
+
+  /// Registra il versamento impostando lo stato della quota a `versata`.
+  ///
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `quota`; eventuali scritture dirette da client
+  /// restituiscono errore `42501`. Questo metodo e' pensato esclusivamente
+  /// per l'esecuzione lato server / Edge Functions con service role oppure per
+  /// testare i Control tramite implementazioni `InMemoryQuotaRepository`.
+  Future<void> registraVersamento(String quotaId);
 
   /// Elimina la quota solo se e' ancora nello stato da_versare.
   ///
-  /// In produzione l'eliminazione e' vincolata dalle policy RLS C e dalle Edge
-  /// Functions, perche' una quota gia' versata non puo' essere rimossa dal client.
+  /// Con le policy RLS di KCK-233 su Supabase il client autenticato ha solo
+  /// permessi di lettura su `quota`; eventuali scritture dirette da client
+  /// restituiscono errore `42501`. Questo metodo e' pensato esclusivamente
+  /// per l'esecuzione lato server / Edge Functions con service role oppure per
+  /// testare i Control tramite implementazioni `InMemoryQuotaRepository`.
   Future<void> deleteDaVersare(String id);
 
   /// Verifica che tutte le quote della partita siano state versate.

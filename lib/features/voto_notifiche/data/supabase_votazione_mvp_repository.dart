@@ -82,7 +82,10 @@ class SupabaseVotazioneMVPRepository implements VotazioneMVPRepository {
 
   @override
   /// Aggiorna il vincitore; in produzione e' destinato all'esecuzione server
-  /// perche' la Migration C non concede scritture client sulla votazione.
+  /// perche' con le policy RLS di KCK-233 su Supabase il client autenticato
+  /// ha solo permessi di lettura su `votazione_mvp`; eventuali scritture
+  /// dirette da client restituiscono errore `42501`. Usare Edge Functions con
+  /// service role oppure testare i Control con InMemoryVotazioneMVPRepository.
   Future<void> updateVincitore(String votazioneId, String? vincitoreId) {
     return _execute(() async {
       await _client
@@ -94,7 +97,10 @@ class SupabaseVotazioneMVPRepository implements VotazioneMVPRepository {
 
   @override
   /// Aggiorna lo stato; in produzione e' destinato all'esecuzione server
-  /// perche' la Migration C protegge la tabella con le policy RLS C.
+  /// perche' con le policy RLS di KCK-233 su Supabase il client autenticato
+  /// ha solo permessi di lettura su `votazione_mvp`; eventuali scritture
+  /// dirette da client restituiscono errore `42501`. Usare Edge Functions con
+  /// service role oppure testare i Control con InMemoryVotazioneMVPRepository.
   Future<void> updateStato(String votazioneId, String statoVotazione) {
     return _execute(() async {
       await _client
