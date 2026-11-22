@@ -80,6 +80,25 @@ void main() {
       expect(result, isNull);
     });
 
+    test('tf_pag_leggiQuota restituisce la quota trovata', () async {
+      final result = await _withRepository(
+        (repository) => repository.leggiQuota('quota-1'),
+        (request) => _RestServer().respond(request, 200, [_quotaJson()]),
+      );
+
+      expect(result, isA<Quota>());
+      expect(result?.id, 'quota-1');
+    });
+
+    test('tf_pag_leggiQuota restituisce null quando manca', () async {
+      final result = await _withRepository(
+        (repository) => repository.leggiQuota('inesistente'),
+        (request) => _RestServer().respond(request, 200, []),
+      );
+
+      expect(result, isNull);
+    });
+
     test('tf_pag_findByPartecipazione trovata', () async {
       final result = await _withRepository(
         (repository) => repository.findByPartecipazione('partecipazione-1'),
@@ -214,6 +233,40 @@ void main() {
         ),
         completes,
       );
+    });
+
+    test('tf_pag_registraVersamento aggiorna lo stato a versata', () async {
+      String? statoAggiornato;
+      await expectLater(
+        _withRepository(
+          (repository) => repository.registraVersamento('quota-1'),
+          (request) async {
+            final body = await utf8.decoder.bind(request).join();
+            statoAggiornato = jsonDecode(body)['stato_versamento'] as String?;
+            await _RestServer().respond(request, 200, []);
+          },
+        ),
+        completes,
+      );
+
+      expect(statoAggiornato, StatoVersamento.versata);
+    });
+
+    test('tf_pag_registraVersamento traduce un errore RLS', () async {
+      final result = await _withRepository<Object?>(
+        (repository) => repository
+            .registraVersamento('quota-1')
+            .then<Object?>((_) => null, onError: (Object error) => error),
+        (request) => _RestServer().respond(request, 409, {
+          'code': '42501',
+          'message': 'permission denied',
+          'details': null,
+          'hint': null,
+        }),
+      );
+
+      expect(result, isA<AppException>());
+      expect((result as AppException).code, 'permission');
     });
 
     test('tf_pag_deleteDaVersare elimina una quota da versare', () async {
