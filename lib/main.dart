@@ -12,6 +12,7 @@ import 'app.dart';
 import 'core/config/app_config.dart';
 import 'core/persistence/sessione_secure_storage.dart';
 import 'core/provider/autenticazione_provider.dart';
+import 'core/provider/registrazione_provider.dart';
 
 /// Messaggio mostrato quando l'app viene avviata senza `config.json`.
 const String messaggioConfigurazioneMancante =
@@ -50,15 +51,16 @@ Future<void> main() async {
     ),
   );
 
-  // Un solo ProviderContainer per tutta l'app: il router legge la sessione
-  // dall'adattatore e le Boundary leggono AutenticazioneControl dallo stesso
-  // container (KCK-215).
+  // Un solo ProviderContainer per tutta l'app: il router riceve la sessione e
+  // i Control di autenticazione e registrazione vengono creati dallo stesso
+  // container e passati alle rispettive Boundary.
   final ProviderContainer container = ProviderContainer();
   runApp(
     UncontrolledProviderScope(
       container: container,
       child: KicklyApp(
         sessioneProvider: container.read(sessioneAutenticazioneProvider),
+        registrazioneControl: container.read(registrazioneControlProvider),
       ),
     ),
   );

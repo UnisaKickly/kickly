@@ -1,29 +1,38 @@
 // Widget radice dell'app Kickly (KCK-194).
 //
 // Collega tema e routing condivisi. Contiene anche le schermate segnaposto
-// delle rotte ancora senza Boundary vera (UI_1, UI_2, Dashboard): servono solo a far funzionare la
+// delle rotte ancora senza Boundary vera (UI_1, Dashboard): servono solo a far funzionare la
 // navigazione e vanno eliminate da qui quando i ticket dei casi d'uso creano le
 // Boundary vere in lib/features/<sottosistema>/presentation/, altrimenti ci
 // sarebbero due classi con lo stesso nome.
 import 'package:flutter/material.dart';
 
 import 'core/router/app_router.dart';
+import 'features/utenza/domain/registrazione_control.dart';
 
-// FormLogin vera (KCK-215) al posto del segnaposto: l'export la rende
-// visibile a chi importa app.dart, come prima (router e test dell'app shell).
+// Le Boundary vere restano esportate da app.dart per il router e i test shell.
 export 'features/utenza/presentation/form_login.dart' show FormLogin;
+export 'features/utenza/presentation/form_registrazione.dart'
+    show FormRegistrazione;
 import 'core/theme/tema_kickly.dart';
 
 /// Applica tema e routing condivisi all'app Kickly.
 class KicklyApp extends StatefulWidget {
-  /// Crea l'app con una sessione non autenticata se non ne viene fornita una.
+  /// Crea l'app con sessione non autenticata e Control opzionale per i test shell.
   const KicklyApp({
     super.key,
     this.sessioneProvider = const SessioneNonAutenticata(),
+    this.registrazioneControl,
   });
 
-  /// Provider iniettabile per decidere la rotta iniziale dell'app.
+  /// Sessione iniettabile che decide i reindirizzamenti del router.
   final SessioneProvider sessioneProvider;
+
+  /// Control passato alle Boundary del flusso di registrazione.
+  ///
+  /// Può essere null solo nelle schermate shell dei test che non eseguono
+  /// operazioni di registrazione.
+  final RegistrazioneControl? registrazioneControl;
 
   @override
   /// Crea lo stato che conserva il router per tutta la vita del widget.
@@ -38,7 +47,10 @@ class _KicklyAppState extends State<KicklyApp> {
   /// Costruisce il router una sola volta prima del primo frame.
   void initState() {
     super.initState();
-    _appRouter = AppRouter(sessioneProvider: widget.sessioneProvider);
+    _appRouter = AppRouter(
+      sessioneProvider: widget.sessioneProvider,
+      registrazioneControl: widget.registrazioneControl,
+    );
   }
 
   @override
@@ -84,21 +96,6 @@ class SchermataIniziale extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Rappresenta provvisoriamente il punto di ingresso alla registrazione.
-///
-/// Segnaposto (UI_2, sostituito dal ticket di UC_ACC_1):
-/// da eliminare quando esiste la Boundary vera.
-class FormRegistrazione extends StatelessWidget {
-  /// Crea il placeholder del form di registrazione.
-  const FormRegistrazione({super.key});
-
-  @override
-  /// Mostra il placeholder destinato al futuro flusso di registrazione.
-  Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: Text('Registrazione')));
   }
 }
 
