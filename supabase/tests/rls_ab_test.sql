@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(62);
+SELECT plan(112);
 
 -- ---------------------------------------------------------------------------
 -- Funzioni di appoggio del test (schema temporaneo, spariscono a fine sessione)
@@ -565,6 +565,404 @@ SELECT is(
     ],
     ARRAY[0, 0, 0, 0, 0, 0, 0],
     'anon: nessuna tabella dello schema A e'' leggibile senza autenticazione'
+);
+
+-- ###########################################################################
+-- ###########################################################################
+-- ##                                                                       ##
+-- ##  SEZIONE B - Tabelle B                                                ##
+-- ##  campo, partita, prenotazione, partecipazione                         ##
+-- ##                                                                       ##
+-- ###########################################################################
+-- ###########################################################################
+RESET ROLE;
+
+-- ---------------------------------------------------------------------------
+-- Dati fittizi delle tabelle B (come postgres)
+-- ---------------------------------------------------------------------------
+INSERT INTO public.campo (id, gestore_campo_id, nome, ubicazione, tariffa_oraria, orari_disponibilita)
+VALUES (
+    '20400000-0000-4000-8000-000000000201',
+    '20400000-0000-4000-8000-000000000004',
+    'Campo RLS 1', 'Via Fittizia 1, Salerno', 60.00, 'lun-dom 09:00-23:00'
+);
+
+-- P1 di lega L1 Conclusa, P2 pubblica Aperta tra 17 giorni, P3 privata senza
+-- lega tra 10 giorni, P4 di lega L1 Aperta senza prenotazione, P5 privata tra
+-- 12 ore. Organizzatore sempre G1. P2, P3 e P5 sono relative a now() perche' il
+-- limite di 24 ore per l'annullamento (D5) dipende dall'ora in cui gira il test.
+INSERT INTO public.partita (id, giocatore_id, lega_id, data_ora, tipologia, privacy, num_partecipanti_richiesti, stato)
+SELECT '20400000-0000-4000-8000-000000000301'::uuid, '20400000-0000-4000-8000-000000000001'::uuid,
+       id, '2026-11-20T18:00:00+00:00'::timestamptz, '5v5', 'privata', 10, 'Conclusa'
+FROM leghe_test WHERE sigla = 'L1'
+UNION ALL
+SELECT '20400000-0000-4000-8000-000000000302', '20400000-0000-4000-8000-000000000001',
+       NULL, now() + interval '17 days', '5v5', 'pubblica', 10, 'Aperta'
+UNION ALL
+SELECT '20400000-0000-4000-8000-000000000303', '20400000-0000-4000-8000-000000000001',
+       NULL, now() + interval '10 days', '5v5', 'privata', 10, 'Aperta'
+UNION ALL
+SELECT '20400000-0000-4000-8000-000000000304', '20400000-0000-4000-8000-000000000001',
+       id, '2026-12-12T18:00:00+00:00', '5v5', 'privata', 10, 'Aperta'
+FROM leghe_test WHERE sigla = 'L1'
+UNION ALL
+SELECT '20400000-0000-4000-8000-000000000305', '20400000-0000-4000-8000-000000000001',
+       NULL, now() + interval '12 hours', '5v5', 'privata', 10, 'Aperta';
+
+INSERT INTO public.prenotazione (
+    id, partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
+    costo_concordato, quota_individuale, commissione, netto_gestore
+)
+VALUES
+    ('20400000-0000-4000-8000-000000000401', '20400000-0000-4000-8000-000000000301',
+     '20400000-0000-4000-8000-000000000201', '2026-11-20T18:00/2026-11-20T19:00',
+     'confermato', NULL, 60.00, 6.00, 3.00, 57.00),
+    ('20400000-0000-4000-8000-000000000402', '20400000-0000-4000-8000-000000000302',
+     '20400000-0000-4000-8000-000000000201', '2026-12-10T18:00/2026-12-10T19:00',
+     'bloccato', '2026-12-09T18:00:00+00:00', 60.00, 6.00, 3.00, 57.00);
+
+INSERT INTO public.partecipazione (id, giocatore_id, partita_id, risposta_stato, data_risposta)
+VALUES
+    ('20400000-0000-4000-8000-000000000501', '20400000-0000-4000-8000-000000000001',
+     '20400000-0000-4000-8000-000000000301', 'confermata', '2026-11-15T10:00:00+00:00'),
+    ('20400000-0000-4000-8000-000000000502', '20400000-0000-4000-8000-000000000002',
+     '20400000-0000-4000-8000-000000000301', 'confermata', '2026-11-15T11:00:00+00:00'),
+    ('20400000-0000-4000-8000-000000000503', '20400000-0000-4000-8000-000000000001',
+     '20400000-0000-4000-8000-000000000302', 'confermata', '2026-11-16T10:00:00+00:00'),
+    ('20400000-0000-4000-8000-000000000504', '20400000-0000-4000-8000-000000000001',
+     '20400000-0000-4000-8000-000000000304', 'confermata', '2026-11-16T11:00:00+00:00');
+
+-- ===========================================================================
+-- campo
+-- ===========================================================================
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000003', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT is(
+    (SELECT count(*)::integer FROM public.campo WHERE id = '20400000-0000-4000-8000-000000000201'),
+    1,
+    'campo: un Giocatore autenticato legge i campi'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000004', 'authenticated');
+SELECT lives_ok(
+    $$INSERT INTO public.campo (gestore_campo_id, nome, ubicazione, tariffa_oraria, orari_disponibilita)
+      VALUES ('20400000-0000-4000-8000-000000000004', 'Campo RLS 2', 'Via Fittizia 2, Salerno', 50.00, 'lun-ven 18:00-23:00')$$,
+    'campo: il Gestore inserisce un proprio campo'
+);
+SELECT lives_ok(
+    $$UPDATE public.campo SET tariffa_oraria = 70.00 WHERE id = '20400000-0000-4000-8000-000000000201'$$,
+    'campo: il Gestore modifica il proprio campo'
+);
+SELECT lives_ok(
+    $$DELETE FROM public.campo WHERE id = '20400000-0000-4000-8000-000000000201'$$,
+    'campo: la DELETE dal client non solleva errori ma e'' filtrata'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000005', 'authenticated');
+SELECT throws_ok(
+    $$INSERT INTO public.campo (gestore_campo_id, nome, ubicazione, tariffa_oraria, orari_disponibilita)
+      VALUES ('20400000-0000-4000-8000-000000000004', 'Campo RLS falso', 'Via Fittizia 3, Salerno', 50.00, 'lun-ven 18:00-23:00')$$,
+    '42501', NULL,
+    'campo: un Gestore non inserisce campi a nome di un altro'
+);
+SELECT lives_ok(
+    $$UPDATE public.campo SET tariffa_oraria = 1.00 WHERE id = '20400000-0000-4000-8000-000000000201'$$,
+    'campo: l''UPDATE del campo altrui non solleva errori ma e'' filtrato'
+);
+
+RESET ROLE;
+SELECT is(
+    (SELECT tariffa_oraria FROM public.campo WHERE id = '20400000-0000-4000-8000-000000000201'),
+    70.00::numeric,
+    'campo: vale la modifica del proprietario, non quella dell''altro Gestore, e il campo non e'' cancellato'
+);
+
+SELECT pg_temp.imposta_jwt(NULL, 'anon');
+SET LOCAL ROLE anon;
+SELECT is(
+    (SELECT count(*)::integer FROM public.campo WHERE id = '20400000-0000-4000-8000-000000000201'),
+    0,
+    'campo: un utente non autenticato non legge i campi'
+);
+
+-- ===========================================================================
+-- partita
+-- ===========================================================================
+RESET ROLE;
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT is(
+    (SELECT count(*)::integer FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000304'),
+    1,
+    'partita: un membro della lega legge una partita di lega a cui non partecipa'
+);
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000301'$$,
+    'partita: l''UPDATE di chi non organizza non solleva errori ma e'' filtrato'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000003', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.partita WHERE id IN (
+        '20400000-0000-4000-8000-000000000301',
+        '20400000-0000-4000-8000-000000000303',
+        '20400000-0000-4000-8000-000000000304'
+    )),
+    0,
+    'partita: un esterno non legge partite private o di leghe altrui'
+);
+SELECT is(
+    (SELECT count(*)::integer FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000302'),
+    1,
+    'partita: un esterno legge la partita pubblica (bacheca)'
+);
+SELECT throws_ok(
+    $$INSERT INTO public.partita (giocatore_id, lega_id, data_ora, tipologia, privacy, num_partecipanti_richiesti)
+      SELECT '20400000-0000-4000-8000-000000000003', id, '2026-12-20T18:00:00+00:00', '5v5', 'privata', 10
+      FROM leghe_test WHERE sigla = 'L1'$$,
+    '42501', NULL,
+    'partita: un non membro non crea partite nella lega'
+);
+SELECT throws_ok(
+    $$INSERT INTO public.partita (giocatore_id, data_ora, tipologia, privacy, num_partecipanti_richiesti)
+      VALUES ('20400000-0000-4000-8000-000000000001', '2026-12-20T18:00:00+00:00', '5v5', 'pubblica', 10)$$,
+    '42501', NULL,
+    'partita: non si crea una partita a nome di un altro organizzatore'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SELECT lives_ok(
+    $$INSERT INTO public.partita (giocatore_id, lega_id, data_ora, tipologia, privacy, num_partecipanti_richiesti)
+      SELECT '20400000-0000-4000-8000-000000000001', id, '2026-12-20T18:00:00+00:00', '5v5', 'privata', 10
+      FROM leghe_test WHERE sigla = 'L1'$$,
+    'partita: un membro crea una partita nella propria lega'
+);
+SELECT throws_ok(
+    $$INSERT INTO public.partita (giocatore_id, data_ora, tipologia, privacy, num_partecipanti_richiesti, stato)
+      VALUES ('20400000-0000-4000-8000-000000000001', '2026-12-21T18:00:00+00:00', '5v5', 'privata', 10, 'Confermata')$$,
+    '42501', NULL,
+    'partita: il client non crea una partita gia'' Confermata (statechart)'
+);
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000303'$$,
+    'partita: l''organizzatore annulla la partita'
+);
+SELECT throws_ok(
+    $$UPDATE public.partita SET giocatore_id = '20400000-0000-4000-8000-000000000002' WHERE id = '20400000-0000-4000-8000-000000000303'$$,
+    '42501', NULL,
+    'partita: l''organizzatore non cede la partita a un altro'
+);
+SELECT throws_ok(
+    $$UPDATE public.partita SET lega_id = (SELECT id FROM leghe_test WHERE sigla = 'L3') WHERE id = '20400000-0000-4000-8000-000000000303'$$,
+    '42501', NULL,
+    'partita: l''organizzatore non sposta la partita in una lega di cui non e'' membro'
+);
+SELECT lives_ok(
+    $$DELETE FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000302'$$,
+    'partita: la DELETE dal client non solleva errori ma e'' filtrata'
+);
+
+RESET ROLE;
+SELECT is(
+    (SELECT stato FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000303'),
+    'Annullata',
+    'partita: l''annullamento dell''organizzatore e'' salvato'
+);
+SELECT is(
+    (SELECT stato FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000301'),
+    'Conclusa',
+    'partita: la partita resta invariata dopo l''UPDATE di chi non organizza'
+);
+SELECT is(
+    (SELECT count(*)::integer FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000302'),
+    1,
+    'partita: dopo la DELETE dal client la partita esiste ancora'
+);
+
+-- ===========================================================================
+-- prenotazione
+-- ===========================================================================
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000004', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT is(
+    (SELECT count(*)::integer FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000401'),
+    1,
+    'prenotazione: il Gestore del campo legge la prenotazione'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000401'),
+    1,
+    'prenotazione: un partecipante legge la prenotazione della partita'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000003', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000401'),
+    0,
+    'prenotazione: un esterno non legge la prenotazione'
+);
+SELECT throws_ok(
+    $$INSERT INTO public.prenotazione (partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
+                                       costo_concordato, quota_individuale, commissione, netto_gestore)
+      VALUES ('20400000-0000-4000-8000-000000000304', '20400000-0000-4000-8000-000000000201',
+              '2026-12-12T18:00/2026-12-12T19:00', 'bloccato', '2026-12-11T18:00:00+00:00',
+              60.00, 6.00, 3.00, 57.00)$$,
+    '42501', NULL,
+    'prenotazione: chi non organizza non prenota per la partita'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000005', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000401'),
+    0,
+    'prenotazione: il Gestore di un altro campo non legge la prenotazione'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SELECT throws_ok(
+    $$INSERT INTO public.prenotazione (partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
+                                       costo_concordato, quota_individuale, commissione, netto_gestore)
+      VALUES ('20400000-0000-4000-8000-000000000304', '20400000-0000-4000-8000-000000000201',
+              '2026-12-12T18:00/2026-12-12T19:00', 'confermato', NULL,
+              60.00, 6.00, 3.00, 57.00)$$,
+    '42501', NULL,
+    'prenotazione: il client non crea una prenotazione gia'' confermata (D26)'
+);
+SELECT lives_ok(
+    $$INSERT INTO public.prenotazione (id, partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
+                                       costo_concordato, quota_individuale, commissione, netto_gestore)
+      VALUES ('20400000-0000-4000-8000-000000000403', '20400000-0000-4000-8000-000000000304',
+              '20400000-0000-4000-8000-000000000201', '2026-12-12T18:00/2026-12-12T19:00',
+              'bloccato', '2026-12-11T18:00:00+00:00', 60.00, 6.00, 3.00, 57.00)$$,
+    'prenotazione: l''organizzatore blocca lo slot'
+);
+SELECT throws_ok(
+    $$UPDATE public.prenotazione SET stato_blocco = 'confermato' WHERE id = '20400000-0000-4000-8000-000000000403'$$,
+    '42501', NULL,
+    'prenotazione: il client non conferma lo slot (D26)'
+);
+SELECT throws_ok(
+    $$UPDATE public.prenotazione SET costo_concordato = 1.00 WHERE id = '20400000-0000-4000-8000-000000000403'$$,
+    '42501', NULL,
+    'prenotazione: gli importi non sono modificabili dal client (GRANT per colonna)'
+);
+SELECT throws_ok(
+    $$UPDATE public.prenotazione SET scadenza_blocco = now() + interval '30 days' WHERE id = '20400000-0000-4000-8000-000000000403'$$,
+    '42501', NULL,
+    'prenotazione: l''organizzatore non prolunga il blocco dello slot'
+);
+SELECT throws_ok(
+    $$UPDATE public.prenotazione SET stato_blocco = 'liberato', scadenza_blocco = NULL
+      WHERE id = '20400000-0000-4000-8000-000000000402'$$,
+    '42501', NULL,
+    'prenotazione: l''organizzatore non libera lo slot di una partita non Annullata (D6)'
+);
+-- D6: prima la partita passa ad Annullata, poi si libera lo slot.
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000302'$$,
+    'prenotazione: l''organizzatore annulla la partita prima di liberare lo slot'
+);
+SELECT lives_ok(
+    $$UPDATE public.prenotazione SET stato_blocco = 'liberato', scadenza_blocco = NULL
+      WHERE id = '20400000-0000-4000-8000-000000000402'$$,
+    'prenotazione: l''organizzatore libera lo slot della partita Annullata e azzera la scadenza (D6, D24)'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
+SELECT lives_ok(
+    $$UPDATE public.prenotazione SET stato_blocco = 'liberato' WHERE id = '20400000-0000-4000-8000-000000000403'$$,
+    'prenotazione: la liberazione da parte di chi non organizza non solleva errori ma e'' filtrata'
+);
+
+RESET ROLE;
+SELECT is(
+    (SELECT stato_blocco || '/' || coalesce(scadenza_blocco::text, 'nessuna') FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000402'),
+    'liberato/nessuna',
+    'prenotazione: lo slot liberato dall''organizzatore risulta liberato e senza scadenza'
+);
+SELECT is(
+    (SELECT stato_blocco FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000403'),
+    'bloccato',
+    'prenotazione: lo slot resta bloccato dopo i tentativi non autorizzati'
+);
+
+-- ===========================================================================
+-- partecipazione
+-- ===========================================================================
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT is(
+    (SELECT count(*)::integer FROM public.partecipazione WHERE id = '20400000-0000-4000-8000-000000000501'),
+    1,
+    'partecipazione: un partecipante legge le partecipazioni della stessa partita'
+);
+SELECT is(
+    (SELECT count(*)::integer FROM public.partecipazione WHERE id = '20400000-0000-4000-8000-000000000504'),
+    1,
+    'partecipazione: un membro della lega legge le partecipazioni di una partita di lega (RF_LEG_4)'
+);
+SELECT lives_ok(
+    $$UPDATE public.partecipazione SET gol_partita = 5 WHERE id = '20400000-0000-4000-8000-000000000502'$$,
+    'partecipazione: il partecipante che non organizza non aggiorna i propri gol (filtrato)'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000003', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.partecipazione WHERE partita_id = '20400000-0000-4000-8000-000000000301'),
+    0,
+    'partecipazione: un esterno non legge le partecipazioni di una partita privata'
+);
+SELECT is(
+    (SELECT count(*)::integer FROM public.partecipazione WHERE partita_id = '20400000-0000-4000-8000-000000000302'),
+    1,
+    'partecipazione: un autenticato legge le partecipazioni di una partita pubblica (posti, KCK-203)'
+);
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SELECT lives_ok(
+    $$UPDATE public.partecipazione SET gol_partita = 2, assist_partita = 1 WHERE id = '20400000-0000-4000-8000-000000000502'$$,
+    'partecipazione: l''organizzatore inserisce gol e assist a partita Conclusa (D2)'
+);
+SELECT throws_ok(
+    $$UPDATE public.partecipazione SET risposta_stato = 'ritirata' WHERE id = '20400000-0000-4000-8000-000000000504'$$,
+    '42501', NULL,
+    'partecipazione: risposta_stato non e'' modificabile dal client (GRANT per colonna)'
+);
+SELECT throws_ok(
+    $$INSERT INTO public.partecipazione (giocatore_id, partita_id, risposta_stato, data_risposta)
+      VALUES ('20400000-0000-4000-8000-000000000001', '20400000-0000-4000-8000-000000000303', 'confermata', now())$$,
+    '42501', NULL,
+    'partecipazione: nessuna INSERT dal client (RSVP lato server)'
+);
+SELECT throws_ok(
+    $$DELETE FROM public.partecipazione WHERE id = '20400000-0000-4000-8000-000000000504'$$,
+    '42501', NULL,
+    'partecipazione: nessuna DELETE dal client'
+);
+
+RESET ROLE;
+SELECT is(
+    (SELECT gol_partita || '/' || assist_partita FROM public.partecipazione WHERE id = '20400000-0000-4000-8000-000000000502'),
+    '2/1',
+    'partecipazione: gol e assist dell''organizzatore salvati, quelli del partecipante no'
+);
+
+-- ===========================================================================
+-- anon: nessuna tabella B e' leggibile senza autenticazione
+-- ===========================================================================
+SELECT pg_temp.imposta_jwt(NULL, 'anon');
+SET LOCAL ROLE anon;
+SELECT is(
+    ARRAY[
+        (SELECT count(*)::integer FROM public.campo),
+        (SELECT count(*)::integer FROM public.partita),
+        (SELECT count(*)::integer FROM public.prenotazione),
+        (SELECT count(*)::integer FROM public.partecipazione)
+    ],
+    ARRAY[0, 0, 0, 0],
+    'anon: nessuna tabella dello schema B e'' leggibile senza autenticazione'
 );
 
 RESET ROLE;

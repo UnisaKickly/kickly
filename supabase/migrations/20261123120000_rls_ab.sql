@@ -338,3 +338,233 @@ CREATE POLICY amministratore_lega_delete_amministratore
 
 COMMENT ON POLICY amministratore_lega_delete_amministratore ON public.amministratore_lega IS
     'Solo un amministratore toglie il ruolo di amministratore, anche a se stesso prima di uscire (RF_LEG_3, D17).';
+
+-- ###########################################################################
+-- ###########################################################################
+-- ##                                                                       ##
+-- ##  SEZIONE 2 - Policy delle tabelle B                                   ##
+-- ##  campo, partita, prenotazione, partecipazione                         ##
+-- ##                                                                       ##
+-- ###########################################################################
+-- ###########################################################################
+
+-- ---------------------------------------------------------------------------
+-- campo
+-- ---------------------------------------------------------------------------
+-- Nessuna DELETE: cancellerebbe a cascata le prenotazioni di partite di altri, e
+-- GestioneCampiControl prevede configurazione e modifica, non cancellazione.
+
+CREATE POLICY campo_select_authenticated
+    ON public.campo
+    FOR SELECT
+    TO authenticated
+    USING (true);
+
+COMMENT ON POLICY campo_select_authenticated ON public.campo IS
+    'Ogni utente autenticato vede i campi per sceglierne uno nella creazione della partita (UC_PAR_1 passo 2, FormCreazionePartita).';
+
+CREATE POLICY campo_insert_gestore
+    ON public.campo
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (gestore_campo_id = auth.uid());
+
+COMMENT ON POLICY campo_insert_gestore ON public.campo IS
+    'Il Gestore del Campo inserisce solo campi propri (RF_ACC_1, GestioneCampiControl).';
+
+CREATE POLICY campo_update_gestore
+    ON public.campo
+    FOR UPDATE
+    TO authenticated
+    USING (gestore_campo_id = auth.uid())
+    WITH CHECK (gestore_campo_id = auth.uid());
+
+COMMENT ON POLICY campo_update_gestore ON public.campo IS
+    'Il Gestore modifica solo i propri campi e non puo'' cederli a un altro Gestore.';
+
+-- ---------------------------------------------------------------------------
+-- partita
+-- ---------------------------------------------------------------------------
+-- Nessuna DELETE: l'annullamento e' uno stato (statechart, RF_PAR_3) che innesca
+-- i rimborsi (RF_PAG_3); una DELETE cancellerebbe a cascata prenotazione e
+-- partecipazioni. I passaggi di stato ammessi al client li controlla il trigger
+-- della sezione 3.
+
+CREATE POLICY partita_select_visibile
+    ON public.partita
+    FOR SELECT
+    TO authenticated
+    USING (
+        privacy = 'pubblica'
+        OR giocatore_id = auth.uid()
+        OR (lega_id IS NOT NULL AND public.e_membro_lega(lega_id))
+        OR public.partecipa_a_partita(id)
+    );
+
+COMMENT ON POLICY partita_select_visibile ON public.partita IS
+    'Visibili: partite pubbliche (bacheca della Dashboard), partite delle proprie leghe (RF_LEG_4), partite organizzate da se'' e quelle a cui si partecipa (DettaglioPartita).';
+
+CREATE POLICY partita_insert_organizzatore
+    ON public.partita
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        giocatore_id = auth.uid()
+        AND (lega_id IS NULL OR public.e_membro_lega(lega_id))
+        AND stato = 'Aperta'
+    );
+
+COMMENT ON POLICY partita_insert_organizzatore ON public.partita IS
+    'Il Giocatore crea partite solo come organizzatore di se stesso (RF_PAR_1), se di lega solo in una lega di cui e'' membro, e sempre nello stato iniziale Aperta (statechart): gli altri stati li raggiunge il server.';
+
+CREATE POLICY partita_update_organizzatore
+    ON public.partita
+    FOR UPDATE
+    TO authenticated
+    USING (giocatore_id = auth.uid())
+    WITH CHECK (
+        giocatore_id = auth.uid()
+        AND (lega_id IS NULL OR public.e_membro_lega(lega_id))
+    );
+
+COMMENT ON POLICY partita_update_organizzatore ON public.partita IS
+    'Solo l''organizzatore modifica o annulla la partita (RF_PAR_3); il WITH CHECK ripete le condizioni dell''INSERT, cosi'' non puo'' cederla ad altri ne'' spostarla in una lega altrui.';
+
+-- ---------------------------------------------------------------------------
+-- prenotazione
+-- ---------------------------------------------------------------------------
+-- Il client blocca lo slot alla creazione e lo libera all'annullamento (D6); la
+-- conferma la fa il server (D26). Gli importi li ricalcolera' un trigger di
+-- KCK-271: qui non si toccano.
+
+CREATE POLICY prenotazione_select_coinvolti
+    ON public.prenotazione
+    FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = prenotazione.partita_id
+              AND partita.giocatore_id = auth.uid()
+        )
+        OR public.partecipa_a_partita(partita_id)
+        OR EXISTS (
+            SELECT 1
+            FROM public.campo
+            WHERE campo.id = prenotazione.campo_id
+              AND campo.gestore_campo_id = auth.uid()
+        )
+    );
+
+COMMENT ON POLICY prenotazione_select_coinvolti ON public.prenotazione IS
+    'La prenotazione e'' visibile all''organizzatore, ai partecipanti (quote in DettaglioPartita) e al Gestore del campo, che riceve le prenotazioni (RAD §3.1.1).';
+
+CREATE POLICY prenotazione_insert_organizzatore
+    ON public.prenotazione
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        stato_blocco = 'bloccato'
+        AND EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = prenotazione.partita_id
+              AND partita.giocatore_id = auth.uid()
+        )
+    );
+
+COMMENT ON POLICY prenotazione_insert_organizzatore ON public.prenotazione IS
+    'Solo l''organizzatore della partita crea la prenotazione, e solo come blocco temporaneo dello slot (PrenotazioneControl): la conferma la fa il server (D26).';
+
+CREATE POLICY prenotazione_update_organizzatore_libera
+    ON public.prenotazione
+    FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = prenotazione.partita_id
+              AND partita.giocatore_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        stato_blocco = 'liberato'
+        AND EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = prenotazione.partita_id
+              AND partita.giocatore_id = auth.uid()
+              AND partita.stato = 'Annullata'
+        )
+    );
+
+-- La condizione sullo stato sta nella stessa sottoquery sull'organizzatore:
+-- l'organizzatore vede sempre le proprie partite (partita_select_visibile), quindi
+-- non serve una funzione SECURITY DEFINER e non c'e' ricorsione, perche' le
+-- policy di partita non leggono prenotazione.
+COMMENT ON POLICY prenotazione_update_organizzatore_libera ON public.prenotazione IS
+    'L''organizzatore puo'' solo liberare lo slot, e solo dopo che la partita e'' passata ad Annullata (D6): altrimenti potrebbe liberare lo slot di una partita ancora Confermata e permettere una seconda prenotazione dello stesso campo. Il GRANT per colonna limita l''UPDATE a stato_blocco e scadenza_blocco (D24, nessun valore economico), gli importi restano esclusi.';
+
+-- scadenza_blocco e' nel GRANT perche' chi libera lo slot azzera anche la
+-- scadenza (D24); il WITH CHECK su 'liberato' impedisce di usarla per prolungare
+-- un blocco.
+REVOKE UPDATE ON public.prenotazione FROM authenticated, anon;
+GRANT UPDATE (stato_blocco, scadenza_blocco) ON public.prenotazione TO authenticated;
+
+-- ---------------------------------------------------------------------------
+-- partecipazione
+-- ---------------------------------------------------------------------------
+-- partecipazione_select_own (KCK-233, migration rls_c) resta: le policy
+-- permissive si sommano. L'RSVP lo scrive l'Edge Function con la service role
+-- (migration B, DG3): dal client solo gol e assist dell'organizzatore (D2), con
+-- il trigger della sezione 3.
+
+CREATE POLICY partecipazione_select_visibile
+    ON public.partecipazione
+    FOR SELECT
+    TO authenticated
+    USING (
+        public.partecipa_a_partita(partita_id)
+        OR EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = partecipazione.partita_id
+              AND (
+                  partita.giocatore_id = auth.uid()
+                  OR partita.privacy = 'pubblica'
+                  OR (partita.lega_id IS NOT NULL AND public.e_membro_lega(partita.lega_id))
+              )
+        )
+    );
+
+COMMENT ON POLICY partecipazione_select_visibile ON public.partecipazione IS
+    'Vedono le partecipazioni: chi partecipa alla stessa partita (DettaglioPartita, FormVotoMVP), l''organizzatore, i membri della lega della partita (RF_LEG_4) e, per le partite pubbliche, tutti gli autenticati (conteggio dei posti, KCK-203).';
+
+CREATE POLICY partecipazione_update_organizzatore
+    ON public.partecipazione
+    FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = partecipazione.partita_id
+              AND partita.giocatore_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM public.partita
+            WHERE partita.id = partecipazione.partita_id
+              AND partita.giocatore_id = auth.uid()
+        )
+    );
+
+COMMENT ON POLICY partecipazione_update_organizzatore ON public.partecipazione IS
+    'Solo l''organizzatore aggiorna le partecipazioni della propria partita; il GRANT per colonna limita l''UPDATE a gol e assist (D2).';
+
+REVOKE INSERT, UPDATE, DELETE ON public.partecipazione FROM authenticated, anon;
+GRANT UPDATE (gol_partita, assist_partita) ON public.partecipazione TO authenticated;
