@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(112);
+SELECT plan(115);
 
 -- ---------------------------------------------------------------------------
 -- Funzioni di appoggio del test (schema temporaneo, spariscono a fine sessione)
@@ -963,6 +963,40 @@ SELECT is(
     ],
     ARRAY[0, 0, 0, 0],
     'anon: nessuna tabella dello schema B e'' leggibile senza autenticazione'
+);
+
+-- ###########################################################################
+-- ###########################################################################
+-- ##                                                                       ##
+-- ##  SEZIONE crea_lega - Amministratore iniziale (migration               ##
+-- ##  20261123120100_crea_lega_admin.sql)                                  ##
+-- ##                                                                       ##
+-- ###########################################################################
+-- ###########################################################################
+RESET ROLE;
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000003', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+    $$SELECT public.crea_lega('Lega RLS AB altrui', '5v5', 'privata', NULL, NULL,
+                              '20400000-0000-4000-8000-000000000001'::uuid)$$,
+    '42501', NULL,
+    'crea_lega: un utente non nomina amministratore un altro Giocatore'
+);
+SELECT lives_ok(
+    $$SELECT public.crea_lega('Lega RLS AB propria', '5v5', 'privata', NULL, NULL,
+                              '20400000-0000-4000-8000-000000000003'::uuid)$$,
+    'crea_lega: un utente crea una lega di cui e'' amministratore'
+);
+
+RESET ROLE;
+SELECT pg_temp.imposta_jwt(NULL, 'anon');
+SET LOCAL ROLE anon;
+SELECT throws_ok(
+    $$SELECT public.crea_lega('Lega RLS AB anonima', '5v5', 'privata', NULL, NULL,
+                              '20400000-0000-4000-8000-000000000001'::uuid)$$,
+    '42501', NULL,
+    'crea_lega: un utente non autenticato non puo'' eseguire la funzione'
 );
 
 RESET ROLE;
