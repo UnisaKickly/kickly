@@ -53,6 +53,38 @@ Future<T> _withAccountSupabase<T>(
   }
 }
 
+/// Richiesta ricevuta dal server finto: serve a verificare ordine, colonne
+/// e opzioni delle chiamate PostgREST (KCK-226).
+class _Richiesta {
+  _Richiesta(this.metodo, this.percorso, this.query, this.prefer, this.body);
+
+  final String metodo;
+  final String percorso;
+  final String query;
+  final String prefer;
+  final Object? body;
+
+  /// Metodo e percorso, per confrontare la sequenza delle chiamate.
+  String get chiamata => '$metodo $percorso';
+}
+
+/// Legge la richiesta e ne registra i dati in [richieste].
+Future<_Richiesta> _registra(
+  HttpRequest request,
+  List<_Richiesta> richieste,
+) async {
+  final testo = await utf8.decoder.bind(request).join();
+  final richiesta = _Richiesta(
+    request.method,
+    request.uri.path,
+    request.uri.query,
+    request.headers.value('prefer') ?? '',
+    testo.isEmpty ? null : jsonDecode(testo),
+  );
+  richieste.add(richiesta);
+  return richiesta;
+}
+
 void main() {
   const account = Account(
     id: 'account-1',
@@ -208,22 +240,288 @@ void main() {
     expect((result as Giocatore).ruoloPreferitoInCampo, 'Difensore');
   });
 
-  test('Supabase createAccount usa upsert e mappa la risposta', () async {
-    var method = '';
-    var path = '';
-    final result = await _withAccountSupabase(
-      (repository) => repository.createAccount(account),
-      (request) async {
-        method = request.method;
-        path = request.uri.path;
-        await _RestServer().respond(request, 200, account.toJson());
+  // KCK-226: la riga di account la crea il trigger crea_account_per_nuovo_utente;
+  // il client ha solo UPDATE sulle colonne con GRANT (decisione dei PM).
+  test(
+    'Supabase createAccount aggiorna la riga creata dal trigger senza INSERT',
+    () async {
+      final richieste = <_Richiesta>[];
+      final result = await _withAccountSupabase(
+        (repository) => repository.createAccount(account),
+        (request) async {
+          await _registra(request, richieste);
+          await _RestServer().respond(request, 200, [
+            {...account.toJson(), 'giocatore': null, 'gestore_campo': null},
+          ]);
+        },
+      );
+
+      expect(richieste.map((r) => r.chiamata), ['PATCH /rest/v1/account']);
+      expect(richieste.single.query, contains('id=eq.account-1'));
+      expect((richieste.single.body as Map).keys.toSet(), {
+        'nome',
+        'cognome',
+        'eta',
+        'preferenze_notifiche',
+      });
+      expect(result.id, 'account-1');
+      expect(result.email, 'mario@example.com');
+    },
+  );
+
+  test(
+    'Supabase createAccount senza riga del trigger lancia unexpected',
+    () async {
+      final result = await _withAccountSupabase<Object?>(
+        (repository) => repository
+            .createAccount(account)
+            .then<Object?>((_) => null, onError: (Object error) => error),
+        (request) => _RestServer().respond(request, 200, <Object>[]),
+      );
+
+      expect(result, isA<AppException>());
+      expect((result as AppException).code, 'unexpected');
+    },
+  );
+
+  group('Supabase onboarding (KCK-226)', () {
+    const giocatore = Giocatore(
+      id: 'account-1',
+      ruoloAccount: RuoloAccount.giocatore,
+      nome: 'Mario',
+      cognome: 'Rossi',
+      email: 'mario@example.com',
+      eta: 25,
+      statoAccount: StatoAccount.attivo,
+      statoOnboarding: StatoOnboarding.completato,
+      preferenzeNotifiche: '{}',
+      ruoloPreferitoInCampo: 'Difensore',
+      piedeDominante: 'Destro',
+    );
+    const gestore = GestoreCampo(
+      id: 'account-1',
+      ruoloAccount: RuoloAccount.gestoreCampo,
+      nome: 'Anna',
+      cognome: 'Bianchi',
+      email: 'anna@example.com',
+      eta: 35,
+      statoAccount: StatoAccount.attivo,
+      statoOnboarding: StatoOnboarding.completato,
+      preferenzeNotifiche: '{}',
+      idAccountPagamenti: 'acct_test_123',
+    );
+
+    /// Simula il database: [specializzazioneEsistente] e' la risposta alla
+    /// verifica della specializzazione, [rigaFinale] quella della rilettura.
+    Future<void> Function(HttpRequest) server(
+      List<_Richiesta> richieste, {
+      required List<Object> specializzazioneEsistente,
+      required Map<String, Object?> rigaFinale,
+    }) {
+      return (request) async {
+        final richiesta = await _registra(request, richieste);
+        if (richiesta.metodo == 'GET' &&
+            richiesta.percorso == '/rest/v1/account') {
+          await _RestServer().respond(request, 200, [rigaFinale]);
+        } else if (richiesta.metodo == 'GET') {
+          await _RestServer().respond(request, 200, specializzazioneEsistente);
+        } else {
+          await _RestServer().respondEmpty(request, 204);
+        }
+      };
+    }
+
+    final rigaGiocatore = <String, Object?>{
+      ...giocatore.toJson(),
+      'giocatore': {
+        'account_id': 'account-1',
+        'ruolo_preferito_in_campo': 'Difensore',
+        'piede_dominante': 'Destro',
+      },
+      'gestore_campo': null,
+    };
+
+    /// Verifica i passi (a) e (c) su account: solo colonne con GRANT, senza
+    /// id, email e stato_account, e stato_onboarding scritto per ultimo.
+    void verificaPassiAccount(List<_Richiesta> richieste, Account atteso) {
+      final aggiornamenti = richieste
+          .where((r) => r.metodo == 'PATCH' && r.percorso == '/rest/v1/account')
+          .toList();
+      expect(aggiornamenti, hasLength(2));
+      expect(aggiornamenti.first.query, contains('id=eq.account-1'));
+      expect(aggiornamenti.first.body, {
+        'nome': atteso.nome,
+        'cognome': atteso.cognome,
+        'eta': atteso.eta,
+        'preferenze_notifiche': atteso.preferenzeNotifiche,
+        'ruolo_account': atteso.ruoloAccount,
+      });
+      expect(aggiornamenti.last.body, {
+        'stato_onboarding': StatoOnboarding.completato,
+      });
+    }
+
+    test(
+      'completaOnboardingGiocatore: ruolo, INSERT della Player Card, stato',
+      () async {
+        final richieste = <_Richiesta>[];
+        final result = await _withAccountSupabase(
+          (repository) => repository.completaOnboardingGiocatore(giocatore),
+          server(
+            richieste,
+            specializzazioneEsistente: <Object>[],
+            rigaFinale: rigaGiocatore,
+          ),
+        );
+
+        expect(richieste.map((r) => r.chiamata), [
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/giocatore',
+          'POST /rest/v1/giocatore',
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/account',
+        ]);
+        verificaPassiAccount(richieste, giocatore);
+        final insert = richieste[2];
+        expect(insert.query, isNot(contains('on_conflict')));
+        expect(insert.prefer, isNot(contains('merge-duplicates')));
+        expect(insert.body, {
+          'account_id': 'account-1',
+          'ruolo_preferito_in_campo': 'Difensore',
+          'piede_dominante': 'Destro',
+        });
+        expect(result.ruoloPreferitoInCampo, 'Difensore');
       },
     );
 
-    expect(method, 'POST');
-    expect(path, '/rest/v1/account');
-    expect(result.id, 'account-1');
-    expect(result.email, 'mario@example.com');
+    // UC_ACC_1 E3: l'onboarding interrotto riprende senza duplicare la riga.
+    test(
+      'completaOnboardingGiocatore riprende con la Player Card gia presente',
+      () async {
+        final richieste = <_Richiesta>[];
+        await _withAccountSupabase(
+          (repository) => repository.completaOnboardingGiocatore(giocatore),
+          server(
+            richieste,
+            specializzazioneEsistente: [
+              {'account_id': 'account-1'},
+            ],
+            rigaFinale: rigaGiocatore,
+          ),
+        );
+
+        expect(richieste.map((r) => r.chiamata), [
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/giocatore',
+          'PATCH /rest/v1/giocatore',
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/account',
+        ]);
+        expect(richieste.where((r) => r.metodo == 'POST'), isEmpty);
+        expect(richieste[2].query, contains('account_id=eq.account-1'));
+        expect(richieste[2].body, {
+          'ruolo_preferito_in_campo': 'Difensore',
+          'piede_dominante': 'Destro',
+        });
+        verificaPassiAccount(richieste, giocatore);
+      },
+    );
+
+    test(
+      'completaOnboardingGestore inserisce gestore_campo senza id pagamenti',
+      () async {
+        final richieste = <_Richiesta>[];
+        final result = await _withAccountSupabase(
+          (repository) => repository.completaOnboardingGestore(gestore),
+          server(
+            richieste,
+            specializzazioneEsistente: <Object>[],
+            rigaFinale: {
+              ...gestore.toJson(),
+              'giocatore': null,
+              'gestore_campo': {
+                'account_id': 'account-1',
+                'id_account_pagamenti': null,
+              },
+            },
+          ),
+        );
+
+        expect(richieste.map((r) => r.chiamata), [
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/gestore_campo',
+          'POST /rest/v1/gestore_campo',
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/account',
+        ]);
+        expect(richieste[2].body, {'account_id': 'account-1'});
+        verificaPassiAccount(richieste, gestore);
+        expect(result, isA<GestoreCampo>());
+      },
+    );
+
+    test(
+      'completaOnboardingGestore riprende senza INSERT se la riga esiste',
+      () async {
+        final richieste = <_Richiesta>[];
+        await _withAccountSupabase(
+          (repository) => repository.completaOnboardingGestore(gestore),
+          server(
+            richieste,
+            specializzazioneEsistente: [
+              {'account_id': 'account-1'},
+            ],
+            rigaFinale: {
+              ...gestore.toJson(),
+              'giocatore': null,
+              'gestore_campo': {'account_id': 'account-1'},
+            },
+          ),
+        );
+
+        expect(richieste.map((r) => r.chiamata), [
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/gestore_campo',
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/account',
+        ]);
+      },
+    );
+
+    test(
+      'un INSERT rifiutato con 42501 ferma l onboarding prima dello stato',
+      () async {
+        final richieste = <_Richiesta>[];
+        final result = await _withAccountSupabase<Object?>(
+          (repository) => repository
+              .completaOnboardingGiocatore(giocatore)
+              .then<Object?>((_) => null, onError: (Object error) => error),
+          (request) async {
+            final richiesta = await _registra(request, richieste);
+            if (richiesta.metodo == 'POST') {
+              await _RestServer().respond(request, 403, {
+                'code': '42501',
+                'message': 'new row violates row-level security policy',
+                'details': null,
+                'hint': null,
+              });
+            } else if (richiesta.metodo == 'GET') {
+              await _RestServer().respond(request, 200, <Object>[]);
+            } else {
+              await _RestServer().respondEmpty(request, 204);
+            }
+          },
+        );
+
+        expect(result, isA<AppException>());
+        expect((result as AppException).code, 'permission');
+        expect(richieste.map((r) => r.chiamata), [
+          'PATCH /rest/v1/account',
+          'GET /rest/v1/giocatore',
+          'POST /rest/v1/giocatore',
+        ]);
+      },
+    );
   });
 
   test(

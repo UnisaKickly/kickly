@@ -98,12 +98,17 @@ class SupabasePartitaRepository implements PartitaRepository {
   }
 
   @override
-  /// Aggiorna i dati persistiti della Partita esistente.
+  /// Aggiorna la Partita esistente scrivendo solo la colonna `stato`.
+  ///
+  /// Dopo KCK-226 il GRANT per colonna ammette dal client solo `stato`, e il
+  /// trigger `partita_cambio_stato_consentito` solo l'annullamento da parte
+  /// dell'organizzatore: mandare le altre colonne produrrebbe un 42501
+  /// (decisione dei PM). Gli altri dati restano quelli persistiti.
   Future<Partita> updatePartita(Partita partita) {
     return _execute(() async {
       final row = await _client
           .from('partita')
-          .update(_columns(partita))
+          .update({'stato': partita.stato})
           .eq('id', partita.id)
           .select()
           .single();

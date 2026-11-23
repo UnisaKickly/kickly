@@ -203,25 +203,47 @@ class SupabaseLegaRepository implements LegaRepository {
     });
   }
 
+  /// Cancella una riga di associazione e verifica che la DELETE l'abbia tolta.
+  ///
+  /// Con la RLS una DELETE non permessa non da' errore: tocca 0 righe
+  /// (KCK-226). Si chiede quindi a PostgREST di restituire le righe
+  /// cancellate e, se non ce ne sono, si lancia un errore di permesso
+  /// (decisione dei PM). La RLS non distingue il permesso negato dalla riga
+  /// gia' assente: anche questo secondo caso diventa un errore di permesso.
+  Future<void> _cancellaAssociazione(
+    String tabella,
+    String legaId,
+    String giocatoreId,
+  ) async {
+    final rows = await _client
+        .from(tabella)
+        .delete()
+        .eq('lega_id', legaId)
+        .eq('giocatore_id', giocatoreId)
+        .select('giocatore_id');
+    if (rows.isEmpty) {
+      throw AppException.permission();
+    }
+  }
+
+  /// Rimuove un membro dalla lega, togliendogli prima l'eventuale ruolo di
+  /// amministratore.
+  ///
+  /// L'amministratore viene rimosso prima del membro: ogni constraint trigger
+  /// DEFERRABLE INITIALLY DEFERRED vede uno stato valido al commit. Se il
+  /// ruolo di amministratore non si puo' togliere ci si ferma subito, senza
+  /// tentare la DELETE del membro.
   @override
   Future<void> rimuoviMembro(String legaId, String giocatoreId) {
     return _execute(() async {
-      if (await _isAdmin(legaId, giocatoreId) &&
-          await _adminCount(legaId) <= 1) {
+      final eraAmministratore = await _isAdmin(legaId, giocatoreId);
+      if (eraAmministratore && await _adminCount(legaId) <= 1) {
         throw _lastAdminError();
       }
-      // L'amministratore viene rimosso prima del membro: ogni constraint
-      // trigger DEFERRABLE INITIALLY DEFERRED vede uno stato valido al commit.
-      await _client
-          .from('amministratore_lega')
-          .delete()
-          .eq('lega_id', legaId)
-          .eq('giocatore_id', giocatoreId);
-      await _client
-          .from('membro_lega')
-          .delete()
-          .eq('lega_id', legaId)
-          .eq('giocatore_id', giocatoreId);
+      if (eraAmministratore) {
+        await _cancellaAssociazione('amministratore_lega', legaId, giocatoreId);
+      }
+      await _cancellaAssociazione('membro_lega', legaId, giocatoreId);
     });
   }
 
