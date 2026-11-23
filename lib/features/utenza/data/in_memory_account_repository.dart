@@ -24,6 +24,98 @@ class InMemoryAccountRepository implements AccountRepository {
   final StreamController<String?> _cambiamenti =
       StreamController<String?>.broadcast();
 
+  /// Registra in memoria credenziali e dati iniziali al posto di Supabase Auth.
+  @override
+  Future<String> registra(
+    String email,
+    String password,
+    String nome,
+    String cognome,
+    int eta,
+  ) async {
+    final emailPulita = email.trim();
+    final emailGiaPresente = _accounts.values.any(
+      (Account account) =>
+          account.email.toLowerCase() == emailPulita.toLowerCase(),
+    );
+    if (emailGiaPresente) {
+      throw AppException(
+        message: 'Email già registrata. Accedi o usa un altro indirizzo email.',
+        code: AccountRepository.codiceEmailGiaRegistrata,
+      );
+    }
+
+    final id = _generateId();
+    _accounts[id] = Account(
+      id: id,
+      nome: nome.trim(),
+      cognome: cognome.trim(),
+      email: emailPulita,
+      eta: eta,
+      statoAccount: StatoAccount.attivo,
+      statoOnboarding: StatoOnboarding.inCorso,
+      preferenzeNotifiche: '{}',
+    );
+    _password[emailPulita] = password;
+    return id;
+  }
+
+  /// Imposta il ruolo scelto e crea la specializzazione vuota del Giocatore.
+  @override
+  Future<void> salvaRuolo(String accountId, String ruolo) async {
+    final Account? account = await findById(accountId);
+    if (account == null) {
+      throw AppException.unexpected(
+        originalError: StateError('Account $accountId non trovato.'),
+      );
+    }
+    if (!RuoloAccount.valori.contains(ruolo)) {
+      throw AppException(
+        message: 'Il ruolo selezionato non è valido.',
+        code: 'ruolo_non_valido',
+      );
+    }
+    if (account is Giocatore || account is GestoreCampo) {
+      throw AppException(
+        message: 'Il ruolo non può essere modificato dopo la scelta.',
+        code: 'ruolo_gia_scelto',
+      );
+    }
+    if (account.ruoloAccount != null && account.ruoloAccount != ruolo) {
+      throw AppException(
+        message: 'Il ruolo non può essere modificato dopo la scelta.',
+        code: 'ruolo_gia_scelto',
+      );
+    }
+
+    if (ruolo == RuoloAccount.giocatore) {
+      _accounts[accountId] = Giocatore(
+        id: account.id,
+        ruoloAccount: ruolo,
+        nome: account.nome,
+        cognome: account.cognome,
+        email: account.email,
+        eta: account.eta,
+        statoAccount: account.statoAccount,
+        statoOnboarding: account.statoOnboarding,
+        preferenzeNotifiche: account.preferenzeNotifiche,
+      );
+      return;
+    }
+
+    _accounts[accountId] = Account(
+      id: account.id,
+      ruoloAccount: ruolo,
+      nome: account.nome,
+      cognome: account.cognome,
+      email: account.email,
+      eta: account.eta,
+      statoAccount: account.statoAccount,
+      statoOnboarding: account.statoOnboarding,
+      preferenzeNotifiche: account.preferenzeNotifiche,
+    );
+  }
+
   /// Registra la password di un'email per i test di login.
   ///
   /// Non fa parte di AccountRepository: nel sistema vero le credenziali le
