@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../core/errors/app_exception.dart';
 import 'account.dart';
 import 'account_repository.dart';
@@ -115,11 +117,49 @@ class RegistrazioneControl {
     );
   }
 
-  /// Indica se riproporre la scelta del ruolo o la Player Card dopo un login.
+  /// Restituisce l'Account della sessione autenticata, se presente.
+  ///
+  /// Il Control mantiene l'accesso al repository nello strato Domain e
+  /// permette al router e alle Boundary di riprendere l'onboarding senza
+  /// dipendere direttamente dalla persistenza.
+  Future<Account?> accountAutenticato() async {
+    final String? accountId = _accountRepository.idAccountAutenticato();
+    if (accountId == null) {
+      return null;
+    }
+    return _accountRepository.findById(accountId);
+  }
+
+  /// Indica quale passo dell'onboarding riproporre dopo un login.
   ///
   /// Un onboarding completato non si ripropone; per un Giocatore incompleto
   /// torna playerCard, mentre un account ancora senza ruolo torna sceltaRuolo.
-  PassoOnboarding passoOnboardingDaRiprendere(Account account) {
+  ///
+  /// Senza argomenti controlla l'Account della sessione autenticata. Il
+  /// parametro posizionale resta supportato per i chiamanti che hanno già
+  /// caricato l'Account e non richiedono un accesso aggiuntivo al repository.
+  FutureOr<PassoOnboarding> passoOnboardingDaRiprendere([Account? account]) {
+    if (account != null) {
+      return _calcolaPassoOnboarding(account);
+    }
+    return _passoOnboardingAccountAutenticato();
+  }
+
+  /// Recupera lo stato di onboarding dell'Account con la sessione aperta.
+  Future<PassoOnboarding> _passoOnboardingAccountAutenticato() async {
+    final Account? account = await accountAutenticato();
+    if (account == null) {
+      throw AppException.unexpected(
+        originalError: StateError(
+          'Account autenticato non disponibile per riprendere onboarding.',
+        ),
+      );
+    }
+    return _calcolaPassoOnboarding(account);
+  }
+
+  /// Traduce lo stato dell'Account nel passo di onboarding da mostrare.
+  PassoOnboarding _calcolaPassoOnboarding(Account account) {
     if (account.statoOnboarding == StatoOnboarding.completato) {
       return PassoOnboarding.nessuno;
     }
