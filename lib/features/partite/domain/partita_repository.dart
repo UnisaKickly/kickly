@@ -20,7 +20,11 @@ abstract interface class PartitaRepository {
   /// Crea una partita con lo stato assegnato dal Control.
   Future<Partita> createPartita(Partita partita);
 
-  /// Aggiorna i dati persistiti della partita.
+  /// Aggiorna lo stato della partita (dal client l'unico passaggio ammesso e'
+  /// l'annullamento dell'organizzatore, D5 e D6).
+  ///
+  /// Gli altri campi non si modificano: il RAD non prevede la modifica di una
+  /// partita e le policy RLS di KCK-226 permettono l'UPDATE solo di `stato`.
   Future<Partita> updatePartita(Partita partita);
 
   /// Aggiorna lo stato della partita senza decidere la transizione.
