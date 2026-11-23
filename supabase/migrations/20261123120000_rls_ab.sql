@@ -7,7 +7,7 @@
 -- non hanno una policy. In piu' si usa REVOKE in due casi, cosi' una policy
 -- aggiunta per errore non basta ad aprirle: dove l'UPDATE e' ammesso solo su
 -- alcune colonne (REVOKE UPDATE e GRANT per colonna su account, giocatore,
--- prenotazione e partecipazione) e dove la scrittura spetta al server (UPDATE di
+-- partita, prenotazione e partecipazione) e dove la scrittura spetta al server (UPDATE di
 -- gestore_campo; INSERT, UPDATE e DELETE di dispositivo_registrato; INSERT e
 -- DELETE di partecipazione).
 -- Restano chiuse di proposito: lettura di account e Player Card altrui, slot
@@ -433,7 +433,13 @@ CREATE POLICY partita_update_organizzatore
     );
 
 COMMENT ON POLICY partita_update_organizzatore ON public.partita IS
-    'Solo l''organizzatore modifica o annulla la partita (RF_PAR_3); il WITH CHECK ripete le condizioni dell''INSERT, cosi'' non puo'' cederla ad altri ne'' spostarla in una lega altrui.';
+    'Solo l''organizzatore aggiorna la partita, e il GRANT per colonna lo limita a stato: dal client si puo'' solo annullare (RF_PAR_3, trigger della sezione 3). Il WITH CHECK ripete le condizioni dell''INSERT, cosi'' non puo'' cederla ad altri ne'' spostarla in una lega altrui.';
+
+-- Il RAD non prevede la modifica di una partita (decisione dei PM su KCK-226):
+-- l'UPDATE dal client e' ammesso solo su stato, cosi' data_ora non si puo'
+-- spostare per aggirare il limite di 24 ore. link_condivisione resta escluso.
+REVOKE UPDATE ON public.partita FROM authenticated, anon;
+GRANT UPDATE (stato) ON public.partita TO authenticated;
 
 -- ---------------------------------------------------------------------------
 -- prenotazione
@@ -476,11 +482,12 @@ CREATE POLICY prenotazione_insert_organizzatore
             FROM public.partita
             WHERE partita.id = prenotazione.partita_id
               AND partita.giocatore_id = auth.uid()
+              AND partita.stato = 'Aperta'
         )
     );
 
 COMMENT ON POLICY prenotazione_insert_organizzatore ON public.prenotazione IS
-    'Solo l''organizzatore della partita crea la prenotazione, e solo come blocco temporaneo dello slot (PrenotazioneControl): la conferma la fa il server (D26).';
+    'Solo l''organizzatore della partita crea la prenotazione, solo per una partita Aperta (UC_PAR_1 passo 5) e solo come blocco temporaneo dello slot (PrenotazioneControl): la conferma la fa il server (D26).';
 
 CREATE POLICY prenotazione_update_organizzatore_libera
     ON public.prenotazione
@@ -591,9 +598,15 @@ GRANT UPDATE (gol_partita, assist_partita) ON public.partecipazione TO authentic
 -- Il trigger rifiuta anche il ritorno di stato_onboarding da completato a
 -- in_corso: altrimenti basterebbero due UPDATE per cambiare ruolo (D9 prevede
 -- solo il passaggio da in_corso a completato).
+-- Rifiuta anche, durante l'onboarding, il cambio di ruolo quando esiste gia' la
+-- riga di giocatore o di gestore_campo: la specializzazione resterebbe legata al
+-- ruolo vecchio (decisione dei PM su KCK-226). Vale anche per il server.
+-- E' SECURITY DEFINER per leggere le specializzazioni senza dipendere dalla RLS
+-- di chi esegue l'UPDATE.
 CREATE FUNCTION public.verifica_cambio_ruolo_account()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
@@ -609,17 +622,120 @@ BEGIN
         END IF;
     END IF;
 
+    IF NEW.ruolo_account IS DISTINCT FROM OLD.ruolo_account
+       AND (
+           EXISTS (SELECT 1 FROM public.giocatore WHERE account_id = NEW.id)
+           OR EXISTS (SELECT 1 FROM public.gestore_campo WHERE account_id = NEW.id)
+       ) THEN
+        RAISE EXCEPTION 'Il ruolo non cambia dopo la creazione della specializzazione'
+            USING ERRCODE = '42501';
+    END IF;
+
     RETURN NEW;
 END;
 $$;
 
 COMMENT ON FUNCTION public.verifica_cambio_ruolo_account() IS
-    'D11: a onboarding completato rifiuta il cambio di ruolo_account e il ritorno di stato_onboarding a in_corso, che permetterebbe di aggirare la regola.';
+    'D11: a onboarding completato rifiuta il cambio di ruolo_account e il ritorno di stato_onboarding a in_corso, che permetterebbe di aggirare la regola; rifiuta sempre il cambio di ruolo quando esiste gia'' la riga di giocatore o di gestore_campo.';
 
 CREATE TRIGGER account_ruolo_definitivo
 BEFORE UPDATE ON public.account
 FOR EACH ROW
 EXECUTE FUNCTION public.verifica_cambio_ruolo_account();
+
+-- D11: la specializzazione corrisponde al ruolo scelto. Le policy INSERT lo
+-- controllano gia' per il client; il trigger vale anche per il server
+-- (auth.uid() NULL), come vincolo di integrita' (decisione dei PM su KCK-226).
+CREATE FUNCTION public.verifica_ruolo_specializzazione()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    ruolo_atteso text;
+    ruolo_salvato text;
+BEGIN
+    ruolo_atteso := CASE TG_TABLE_NAME
+        WHEN 'giocatore' THEN 'Giocatore'
+        ELSE 'GestoreCampo'
+    END;
+
+    SELECT ruolo_account
+    INTO ruolo_salvato
+    FROM public.account
+    WHERE id = NEW.account_id;
+
+    IF ruolo_salvato IS DISTINCT FROM ruolo_atteso THEN
+        RAISE EXCEPTION 'La specializzazione % richiede il ruolo %', TG_TABLE_NAME, ruolo_atteso
+            USING ERRCODE = '42501';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.verifica_ruolo_specializzazione() IS
+    'D11: rifiuta la riga di giocatore se ruolo_account non e'' Giocatore e la riga di gestore_campo se non e'' GestoreCampo, anche quando scrive il server.';
+
+CREATE TRIGGER giocatore_ruolo_coerente
+BEFORE INSERT ON public.giocatore
+FOR EACH ROW
+EXECUTE FUNCTION public.verifica_ruolo_specializzazione();
+
+CREATE TRIGGER gestore_campo_ruolo_coerente
+BEFORE INSERT ON public.gestore_campo
+FOR EACH ROW
+EXECUTE FUNCTION public.verifica_ruolo_specializzazione();
+
+-- D11: un onboarding completato ha la specializzazione corrispondente al ruolo.
+-- Il controllo e' differito alla fine della transazione, come i trigger sugli
+-- amministratori della migration A: il server, il seed e i test possono
+-- segnare l'onboarding completato e creare la specializzazione nella stessa
+-- transazione. Quando scatta rilegge lo stato attuale dell'account, non quello
+-- del momento dell'UPDATE.
+CREATE FUNCTION public.verifica_onboarding_completato()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    stato_attuale text;
+    ruolo_attuale text;
+BEGIN
+    SELECT stato_onboarding, ruolo_account
+    INTO stato_attuale, ruolo_attuale
+    FROM public.account
+    WHERE id = NEW.id;
+
+    IF NOT FOUND OR stato_attuale IS DISTINCT FROM 'completato' THEN
+        RETURN NULL;
+    END IF;
+
+    IF ruolo_attuale = 'Giocatore'
+       AND EXISTS (SELECT 1 FROM public.giocatore WHERE account_id = NEW.id) THEN
+        RETURN NULL;
+    END IF;
+
+    IF ruolo_attuale = 'GestoreCampo'
+       AND EXISTS (SELECT 1 FROM public.gestore_campo WHERE account_id = NEW.id) THEN
+        RETURN NULL;
+    END IF;
+
+    RAISE EXCEPTION 'Onboarding completato senza la specializzazione del ruolo'
+        USING ERRCODE = '23514';
+END;
+$$;
+
+COMMENT ON FUNCTION public.verifica_onboarding_completato() IS
+    'D11: al termine della transazione rifiuta un Account con onboarding completato che non ha la riga di giocatore o di gestore_campo corrispondente al ruolo.';
+
+CREATE CONSTRAINT TRIGGER account_onboarding_completato
+AFTER UPDATE ON public.account
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION public.verifica_onboarding_completato();
 
 -- ---------------------------------------------------------------------------
 -- partecipazione: gol e assist (D2)

@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(134);
+SELECT plan(145);
 
 -- ---------------------------------------------------------------------------
 -- Funzioni di appoggio del test (schema temporaneo, spariscono a fine sessione)
@@ -847,6 +847,17 @@ SELECT throws_ok(
     '42501', NULL,
     'prenotazione: il client non crea una prenotazione gia'' confermata (D26)'
 );
+-- P1 e' Conclusa: la WITH CHECK della RLS si valuta prima dei vincoli di
+-- unicita' (P1 ha gia' una prenotazione), quindi l'errore e' 42501 e non 23505.
+SELECT throws_ok(
+    $$INSERT INTO public.prenotazione (partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
+                                       costo_concordato, quota_individuale, commissione, netto_gestore)
+      VALUES ('20400000-0000-4000-8000-000000000301', '20400000-0000-4000-8000-000000000201',
+              '2026-12-14T18:00/2026-12-14T19:00', 'bloccato', '2026-12-13T18:00:00+00:00',
+              60.00, 6.00, 3.00, 57.00)$$,
+    '42501', NULL,
+    'prenotazione: l''organizzatore non prenota per una partita non Aperta (UC_PAR_1 passo 5)'
+);
 SELECT lives_ok(
     $$INSERT INTO public.prenotazione (id, partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
                                        costo_concordato, quota_individuale, commissione, netto_gestore)
@@ -1091,17 +1102,43 @@ SELECT throws_ok(
     '42501', NULL,
     'partita: l''annullamento a meno di 24 ore e'' rifiutato (D5)'
 );
-SELECT lives_ok(
-    $$UPDATE public.partita SET stato = 'Aperta', num_partecipanti_richiesti = 12
+-- Il RAD non prevede la modifica della partita: il GRANT per colonna ammette
+-- solo stato (decisione dei PM su KCK-226).
+SELECT throws_ok(
+    $$UPDATE public.partita SET num_partecipanti_richiesti = 12
       WHERE id = '20400000-0000-4000-8000-000000000304'$$,
-    'partita: l''UPDATE dell''organizzatore che non cambia lo stato e'' accettato'
+    '42501', NULL,
+    'partita: l''organizzatore non modifica num_partecipanti_richiesti (GRANT per colonna)'
+);
+SELECT throws_ok(
+    $$UPDATE public.partita SET data_ora = '2026-12-19T18:00:00+00:00'
+      WHERE id = '20400000-0000-4000-8000-000000000304'$$,
+    '42501', NULL,
+    'partita: l''organizzatore non modifica data_ora (GRANT per colonna)'
+);
+-- Primo passo dell'aggiramento del limite di 24 ore: spostare in avanti la data
+-- di una partita vicina (P5, tra 12 ore) per poi annullarla.
+SELECT throws_ok(
+    $$UPDATE public.partita SET data_ora = now() + interval '10 days'
+      WHERE id = '20400000-0000-4000-8000-000000000305'$$,
+    '42501', NULL,
+    'partita: l''organizzatore non sposta la data per aggirare il limite di 24 ore (D5)'
+);
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Aperta' WHERE id = '20400000-0000-4000-8000-000000000304'$$,
+    'partita: l''UPDATE dell''organizzatore che riscrive lo stesso stato e'' accettato'
 );
 
 RESET ROLE;
 SELECT is(
     (SELECT stato || '/' || num_partecipanti_richiesti FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000304'),
-    'Aperta/12',
-    'partita: l''UPDATE senza cambio di stato e'' salvato e i passaggi rifiutati non hanno cambiato lo stato'
+    'Aperta/10',
+    'partita: i passaggi e le modifiche rifiutati non hanno cambiato la partita'
+);
+SELECT cmp_ok(
+    (SELECT data_ora FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000305'),
+    '<', now() + interval '1 day',
+    'partita: la data della partita vicina non e'' stata spostata'
 );
 
 -- Il trigger rifiuta anche chi non organizza. Dal client la RLS filtra gia'
@@ -1154,6 +1191,84 @@ SELECT is(
      WHERE id IN ('20400000-0000-4000-8000-000000000306', '20400000-0000-4000-8000-000000000307')),
     ARRAY['Annullata', 'Annullata'],
     'partita: le partite Completa e Confermata risultano Annullata'
+);
+
+-- ===========================================================================
+-- onboarding: ruolo e specializzazione (D11)
+-- ===========================================================================
+-- Questo blocco sta in fondo al file perche' SET CONSTRAINTS ... IMMEDIATE
+-- resta in vigore fino alla fine della transazione.
+
+-- Cambio di ruolo con la specializzazione gia' presente: N1 ha l'onboarding in
+-- corso, ruolo Giocatore e la riga di giocatore (sezione A).
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000006', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+    $$UPDATE public.account SET ruolo_account = 'GestoreCampo' WHERE id = '20400000-0000-4000-8000-000000000006'$$,
+    '42501', NULL,
+    'onboarding: D11, il ruolo non cambia se esiste gia'' la specializzazione'
+);
+
+-- Specializzazione con ruolo non corrispondente, scritta dal server.
+RESET ROLE;
+SELECT pg_temp.imposta_jwt(NULL, 'service_role');
+SET LOCAL ROLE service_role;
+SELECT throws_ok(
+    $$INSERT INTO public.giocatore (account_id) VALUES ('20400000-0000-4000-8000-000000000005')$$,
+    '42501', NULL,
+    'onboarding: D11, anche il server non crea una riga Giocatore per un GestoreCampo'
+);
+SELECT throws_ok(
+    $$INSERT INTO public.gestore_campo (account_id) VALUES ('20400000-0000-4000-8000-000000000003')$$,
+    '42501', NULL,
+    'onboarding: D11, anche il server non crea una riga GestoreCampo per un Giocatore'
+);
+
+-- N3 e N4: onboarding in corso con ruolo Giocatore e senza specializzazione.
+RESET ROLE;
+SELECT pg_temp.crea_utente('20400000-0000-4000-8000-000000000008', 'n3.rls@example.test', 'Nora');
+SELECT pg_temp.crea_utente('20400000-0000-4000-8000-000000000009', 'n4.rls@example.test', 'Nando');
+UPDATE public.account
+SET ruolo_account = 'Giocatore'
+WHERE id IN ('20400000-0000-4000-8000-000000000008', '20400000-0000-4000-8000-000000000009');
+
+-- Con il ruolo corrispondente il trigger lascia passare: a rifiutare la riga di
+-- un altro Account resta la RLS, provata qui da sola.
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+    $$INSERT INTO public.giocatore (account_id) VALUES ('20400000-0000-4000-8000-000000000008')$$,
+    '42501', NULL,
+    'giocatore: la RLS rifiuta la riga Giocatore di un altro Account anche con il ruolo corrispondente'
+);
+
+-- Rifiuto: N3 completa l'onboarding senza specializzazione. Il controllo e'
+-- differito: SET CONSTRAINTS ... IMMEDIATE lo esegue subito, altrimenti col
+-- ROLLBACK finale non scatterebbe mai.
+RESET ROLE;
+UPDATE public.account
+SET stato_onboarding = 'completato'
+WHERE id = '20400000-0000-4000-8000-000000000008';
+SELECT throws_ok(
+    $$SET CONSTRAINTS account_onboarding_completato IMMEDIATE$$,
+    '23514', NULL,
+    'onboarding: D11, un onboarding completato senza specializzazione e'' rifiutato'
+);
+
+-- La SET CONSTRAINTS fallita e' annullata con il suo savepoint e il controllo
+-- su N3 resta in coda: si aggiunge la specializzazione, cosi' il caso valido
+-- sotto verifica solo N4.
+INSERT INTO public.giocatore (account_id) VALUES ('20400000-0000-4000-8000-000000000008');
+
+-- Caso valido: N4 completa l'onboarding e la specializzazione arriva dopo
+-- l'UPDATE ma prima del controllo, come nel seed.
+UPDATE public.account
+SET stato_onboarding = 'completato'
+WHERE id = '20400000-0000-4000-8000-000000000009';
+INSERT INTO public.giocatore (account_id) VALUES ('20400000-0000-4000-8000-000000000009');
+SELECT lives_ok(
+    $$SET CONSTRAINTS account_onboarding_completato IMMEDIATE$$,
+    'onboarding: D11, con la specializzazione inserita prima del controllo l''onboarding completato e'' accettato'
 );
 
 RESET ROLE;
