@@ -245,6 +245,19 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 
 ---
 
+## D28 – Registrazione, ripresa dell'onboarding e regola della password
+
+* **Problema:** Il piano di KCK-250 ha trovato punti non coperti. `AccountRepository` non ha un'operazione per creare le credenziali (registrazione con password) ne' per salvare il ruolo definitivo lasciando la Player Card incompleta; il RAD non dice con quale operazione si riprende l'onboarding interrotto (UC_ACC_1 E3); UC_ACC_1 E2 parla di "password debole" senza dire quando una password e' debole.
+* **Decisione:**
+  * **Credenziali:** `AccountRepository.registra(email, password, nome, cognome, eta)` crea l'utente nel servizio di autenticazione, con nome, cognome ed eta' nei metadati, e restituisce l'id dell'account: la riga `account` la crea il trigger della Migration A (C6). Se l'email e' gia' registrata (UC_ACC_1 E1) lancia un'`AppException` con codice `email_gia_registrata`, come `credenziali_non_valide` per il login. La password passa solo al servizio di autenticazione e non si salva (`class_diagram_sdd.md` §3, regola 2).
+  * **Ruolo definitivo (passo 7):** `AccountRepository.salvaRuolo(accountId, ruolo)` imposta `ruolo_account` e crea la riga `giocatore` con la Player Card vuota (C6: il Giocatore nasce alla scelta del ruolo). `completaOnboardingGiocatore` resta l'operazione che salva la Player Card e porta `statoOnboarding` a `completato`.
+  * **Ripresa dell'onboarding (E3):** `RegistrazioneControl.passoOnboardingDaRiprendere(Account)` restituisce `sceltaRuolo` se l'account non ha ancora un ruolo, `playerCard` se e' un Giocatore senza ruolo in campo o piede dominante, `nessuno` se `statoOnboarding` e' `completato`. Il ramo del Gestore del Campo (configurazione della struttura) e' definito dai ticket KCK-223 e KCK-227. Dopo `AutenticazioneControl.login()` la GUI chiama il metodo sull'`Account` restituito.
+  * **Password debole (E2):** una password e' valida se ha almeno 8 caratteri, con almeno una lettera e un numero. Altrimenti `PasswordDeboleException` con messaggio "La password deve avere almeno 8 caratteri, una lettera e un numero". La regola sta in una sola funzione del Domain, usata da `RegistrazioneControl` e da `RecuperoPasswordControl` (D16). Il minimo di 6 caratteri di `supabase/config.toml` resta come difesa del servizio.
+  * **Chi li scrive:** i due metodi di `AccountRepository` li aggiunge l'autore di KCK-250 nella sua PR (interfaccia, implementazione Supabase e in memoria, test), con Pietro Senatore come revisore: e' un'eccezione alla regola sui repository di altri, decisa dai PM per non fermare lo sprint.
+* **Ticket coinvolti:** KCK-250 (registrazione Giocatore e Player Card); KCK-198 (schermate); KCK-234, KCK-262 (recupero password); KCK-223, KCK-227 (ramo Gestore); test frame TF_ACC_01, TF_ACC_04, TF_ACC_18 (KCK-232)
+
+---
+
 ## D29 – Formato e durata del codice d'invito della lega
 
 * **Problema:** UC_LEG_1 passo 4 chiede di generare "un codice d'invito univoco" alla creazione della lega e la tabella degli oggetti dice che `Lega` contiene il codice e la sua scadenza, ma il RAD non dice ne' il formato ne' la durata; nel database codice e scadenza sono obbligatori insieme (CHECK `lega_codice_invito_scadenza_check`).
