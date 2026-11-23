@@ -45,7 +45,13 @@ Future<T> _withAccountSupabase<T>(
   await server.start(handler);
   try {
     return await HttpOverrides.runZoned(() async {
-      final client = SupabaseClient(server.url, 'test-anon-key');
+      final client = SupabaseClient(
+        server.url,
+        'test-anon-key',
+        authOptions: const AuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      );
       return body(SupabaseAccountRepository(client));
     });
   } finally {
@@ -106,6 +112,96 @@ void main() {
     expect(saved, same(account));
     expect(await repository.findById('account-1'), same(account));
     expect(await repository.findByEmail('mario@example.com'), same(account));
+  });
+
+  test('registra in memoria e rifiuta un email gia registrata', () async {
+    final repository = InMemoryAccountRepository();
+
+    final id = await repository.registra(
+      ' mario@example.com ',
+      'PasswordFittizia1!',
+      'Mario',
+      'Rossi',
+      25,
+    );
+    final idOriginale = id;
+    final registrato = await repository.findById(id);
+
+    expect(registrato, isA<Account>());
+    expect(registrato!.email, 'mario@example.com');
+    expect(registrato.statoAccount, StatoAccount.attivo);
+    expect(registrato.statoOnboarding, StatoOnboarding.inCorso);
+    await expectLater(
+      repository.registra(
+        'MARIO@example.com',
+        'PasswordFittizia1!',
+        'Mario',
+        'Rossi',
+        25,
+      ),
+      throwsA(
+        isA<AppException>().having(
+          (e) => e.code,
+          'code',
+          AccountRepository.codiceEmailGiaRegistrata,
+        ),
+      ),
+    );
+    expect(
+      (await repository.findByEmail('mario@example.com'))!.id,
+      idOriginale,
+    );
+  });
+
+  test('salvaRuolo crea un Giocatore con Player Card vuota', () async {
+    final repository = InMemoryAccountRepository();
+    final id = await repository.registra(
+      'mario@example.com',
+      'PasswordFittizia1!',
+      'Mario',
+      'Rossi',
+      25,
+    );
+
+    await repository.salvaRuolo(id, RuoloAccount.giocatore);
+    final giocatore = await repository.findById(id);
+
+    expect(giocatore, isA<Giocatore>());
+    expect(giocatore!.ruoloAccount, RuoloAccount.giocatore);
+    expect((giocatore as Giocatore).ruoloPreferitoInCampo, isNull);
+    expect(giocatore.piedeDominante, isNull);
+
+    await expectLater(
+      repository.salvaRuolo(id, 'GestoreCampo'),
+      throwsA(
+        isA<AppException>().having(
+          (errore) => errore.code,
+          'code',
+          'ruolo_gia_scelto',
+        ),
+      ),
+    );
+    expect(
+      (await repository.findById(id))!.ruoloAccount,
+      RuoloAccount.giocatore,
+    );
+  });
+
+  test('salvaRuolo non crea un Giocatore per un altro ruolo', () async {
+    final repository = InMemoryAccountRepository();
+    final id = await repository.registra(
+      'anna@example.com',
+      'PasswordFittizia1!',
+      'Anna',
+      'Bianchi',
+      30,
+    );
+
+    await repository.salvaRuolo(id, RuoloAccount.gestoreCampo);
+
+    final account = await repository.findById(id);
+    expect(account, isNot(isA<Giocatore>()));
+    expect(account!.ruoloAccount, RuoloAccount.gestoreCampo);
   });
 
   test('assegna un UUID deterministico a un Account senza id', () async {
@@ -523,6 +619,205 @@ void main() {
       },
     );
   });
+
+  test(
+    'Supabase registra con signUp e passa i dati anagrafici nei metadati',
+    () async {
+      Map<String, dynamic>? corpo;
+      final richieste = <String>[];
+      final risultato = await _withAccountSupabase<Object?>(
+        (repository) => repository
+            .registra(
+              'mario@example.com',
+              'PasswordFittizia1!',
+              'Mario',
+              'Rossi',
+              25,
+            )
+            .then<Object?>((id) => id, onError: (Object error) => error),
+        (request) async {
+          richieste.add('${request.method} ${request.uri.path}');
+          expect(request.method, 'POST');
+          expect(request.uri.path, '/auth/v1/signup');
+          corpo = Map<String, dynamic>.from(
+            jsonDecode(await utf8.decoder.bind(request).join()) as Map,
+          );
+          await _RestServer().respond(request, 200, {
+            'id': 'account-1',
+            'aud': 'authenticated',
+            'role': 'authenticated',
+            'email': 'mario@example.com',
+            'created_at': '2026-11-21T10:00:00Z',
+            'app_metadata': <String, Object?>{},
+            'user_metadata': {'nome': 'Mario', 'cognome': 'Rossi', 'eta': 25},
+            'identities': [
+              {
+                'id': 'identity-1',
+                'user_id': 'account-1',
+                'identity_id': 'identity-1',
+                'provider': 'email',
+                'identity_data': {'email': 'mario@example.com'},
+              },
+            ],
+          });
+        },
+      );
+
+      expect(
+        risultato,
+        'account-1',
+        reason: risultato is AppException
+            ? '${risultato.code}: ${risultato.originalError}'
+            : null,
+      );
+      expect(richieste, ['POST /auth/v1/signup']);
+      expect(corpo?['email'], 'mario@example.com');
+      expect(corpo?['password'], 'PasswordFittizia1!');
+      expect(corpo?['data'], {'nome': 'Mario', 'cognome': 'Rossi', 'eta': 25});
+    },
+  );
+
+  test('Supabase traduce un email duplicato in email_gia_registrata', () async {
+    final risultato = await _withAccountSupabase<Object?>(
+      (repository) => repository
+          .registra(
+            'mario@example.com',
+            'PasswordFittizia1!',
+            'Mario',
+            'Rossi',
+            25,
+          )
+          .then<Object?>((_) => null, onError: (Object error) => error),
+      (request) => _RestServer().respond(request, 200, {
+        'id': 'account-esistente',
+        'aud': 'authenticated',
+        'role': 'authenticated',
+        'email': 'mario@example.com',
+        'created_at': '2026-11-21T10:00:00Z',
+        'app_metadata': <String, Object?>{},
+        'user_metadata': <String, Object?>{},
+        'identities': <Object?>[],
+      }),
+    );
+
+    expect(risultato, isA<AppException>());
+    expect(
+      (risultato as AppException).code,
+      AccountRepository.codiceEmailGiaRegistrata,
+      reason: '${risultato.originalError}',
+    );
+  });
+
+  test(
+    'Supabase salva ruolo Giocatore con UPDATE seguito da INSERT puro',
+    () async {
+      final richieste = <String>[];
+      final corpi = <String, Map<String, dynamic>>{};
+      await _withAccountSupabase<void>(
+        (repository) =>
+            repository.salvaRuolo('account-1', RuoloAccount.giocatore),
+        (request) async {
+          final percorso = '${request.method} ${request.uri.path}';
+          richieste.add(percorso);
+          if (request.method == 'GET' &&
+              request.uri.path == '/rest/v1/account') {
+            await _RestServer().respond(request, 200, [
+              {'ruolo_account': null},
+            ]);
+          } else if (request.method == 'GET') {
+            await _RestServer().respond(request, 200, []);
+          } else {
+            corpi[percorso] = Map<String, dynamic>.from(
+              jsonDecode(await utf8.decoder.bind(request).join()) as Map,
+            );
+            await _RestServer().respondEmpty(request, 204);
+          }
+        },
+      );
+
+      final scritture = richieste.where(
+        (percorso) =>
+            percorso.startsWith('PATCH ') || percorso.startsWith('POST '),
+      );
+      expect(scritture, ['PATCH /rest/v1/account', 'POST /rest/v1/giocatore']);
+      expect(corpi['PATCH /rest/v1/account'], {
+        'ruolo_account': RuoloAccount.giocatore,
+      });
+      expect(corpi['POST /rest/v1/giocatore'], {
+        'account_id': 'account-1',
+        'ruolo_preferito_in_campo': null,
+        'piede_dominante': null,
+      });
+      expect(corpi['PATCH /rest/v1/account']!.keys, ['ruolo_account']);
+    },
+  );
+
+  test(
+    'Supabase non cambia ruolo quando esiste gia una specializzazione',
+    () async {
+      final scritture = <String>[];
+      final risultato = await _withAccountSupabase<Object?>(
+        (repository) => repository
+            .salvaRuolo('account-1', RuoloAccount.giocatore)
+            .then<Object?>((_) => null, onError: (Object error) => error),
+        (request) async {
+          if (request.method == 'GET' &&
+              request.uri.path == '/rest/v1/account') {
+            await _RestServer().respond(request, 200, [
+              {'ruolo_account': RuoloAccount.giocatore},
+            ]);
+          } else if (request.method == 'GET' &&
+              request.uri.path == '/rest/v1/giocatore') {
+            await _RestServer().respond(request, 200, [
+              {'account_id': 'account-1'},
+            ]);
+          } else if (request.method == 'GET') {
+            await _RestServer().respond(request, 200, []);
+          } else {
+            scritture.add('${request.method} ${request.uri.path}');
+            await _RestServer().respondEmpty(request, 204);
+          }
+        },
+      );
+
+      expect(risultato, isA<AppException>());
+      expect((risultato as AppException).code, 'ruolo_gia_scelto');
+      expect(scritture, isEmpty);
+    },
+  );
+
+  test(
+    'Supabase non inserisce un Giocatore se il ruolo non e Giocatore',
+    () async {
+      final richieste = <String>[];
+      await _withAccountSupabase<void>(
+        (repository) =>
+            repository.salvaRuolo('account-1', RuoloAccount.gestoreCampo),
+        (request) async {
+          final percorso = '${request.method} ${request.uri.path}';
+          richieste.add(percorso);
+          if (request.method == 'GET' &&
+              request.uri.path == '/rest/v1/account') {
+            await _RestServer().respond(request, 200, [
+              {'ruolo_account': null},
+            ]);
+          } else if (request.method == 'GET') {
+            await _RestServer().respond(request, 200, []);
+          } else {
+            await _RestServer().respondEmpty(request, 204);
+          }
+        },
+      );
+
+      expect(
+        richieste.where(
+          (percorso) =>
+              percorso.startsWith('PATCH ') || percorso.startsWith('POST '),
+        ),
+        ['PATCH /rest/v1/account'],
+      );
+    },
+  );
 
   test(
     'Supabase aggiornaPlayerCard segnala specializzazione mancante',

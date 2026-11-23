@@ -11,6 +11,25 @@ abstract interface class AccountRepository {
   /// autenticazione rifiuta email e password (KCK-208, risposta dei PM).
   static const codiceCredenzialiNonValide = 'credenziali_non_valide';
 
+  /// Codice dell'AppException lanciata da [registra] quando l'email esiste gia'.
+  static const codiceEmailGiaRegistrata = 'email_gia_registrata';
+
+  /// Crea le credenziali Auth e restituisce l'id dell'account creato.
+  ///
+  /// Nome, cognome ed eta' vengono passati nei metadati perche' il trigger
+  /// della Migration A crei la riga Account. La password non viene persistita
+  /// in Account.
+  Future<String> registra(
+    String email,
+    String password,
+    String nome,
+    String cognome,
+    int eta,
+  );
+
+  /// Salva il ruolo scelto e, per il Giocatore, crea la Player Card vuota.
+  Future<void> salvaRuolo(String accountId, String ruolo);
+
   /// Autentica l'utente con le credenziali della registrazione (RF_ACC_3) e
   /// restituisce l'id del suo account.
   ///

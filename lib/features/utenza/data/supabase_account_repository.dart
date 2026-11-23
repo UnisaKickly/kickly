@@ -137,6 +137,125 @@ class SupabaseAccountRepository implements AccountRepository {
     );
   }
 
+  /// Registra le credenziali e affida al trigger la creazione dell'Account.
+  @override
+  Future<String> registra(
+    String email,
+    String password,
+    String nome,
+    String cognome,
+    int eta,
+  ) async {
+    try {
+      final AuthResponse risposta = await _client.auth.signUp(
+        email: email,
+        password: password,
+        data: {'nome': nome, 'cognome': cognome, 'eta': eta},
+      );
+      final user = risposta.user;
+      if (user == null) {
+        throw AppException.unexpected(
+          originalError: StateError(
+            'Registrazione senza utente nella risposta.',
+          ),
+        );
+      }
+      if (user.identities?.isEmpty ?? false) {
+        throw AppException(
+          message:
+              'Email già registrata. Accedi o usa un altro indirizzo email.',
+          code: AccountRepository.codiceEmailGiaRegistrata,
+        );
+      }
+      return user.id;
+    } on AppException {
+      rethrow;
+    } on AuthRetryableFetchException catch (error, stackTrace) {
+      throw AppException.network(originalError: error, stackTrace: stackTrace);
+    } on AuthException catch (error, stackTrace) {
+      if (_emailGiaRegistrata(error)) {
+        throw AppException(
+          message:
+              'Email già registrata. Accedi o usa un altro indirizzo email.',
+          code: AccountRepository.codiceEmailGiaRegistrata,
+          originalError: error,
+          stackTrace: stackTrace,
+        );
+      }
+      throw translateSupabaseError(error, stackTrace: stackTrace);
+    } catch (error, stackTrace) {
+      throw translateSupabaseError(error, stackTrace: stackTrace);
+    }
+  }
+
+  /// Riconosce i codici di Auth che indicano una registrazione duplicata.
+  bool _emailGiaRegistrata(AuthException error) {
+    return error.code == 'user_already_exists' || error.code == 'email_exists';
+  }
+
+  /// Registra il ruolo senza sovrascrivere una scelta o specializzazione esistente.
+  ///
+  /// Controlla prima lo stato corrente; poi aggiorna solo `ruolo_account` e,
+  /// se e' stato scelto Giocatore, inserisce la riga con Player Card vuota.
+  @override
+  Future<void> salvaRuolo(String accountId, String ruolo) {
+    return _execute(() async {
+      if (!RuoloAccount.valori.contains(ruolo)) {
+        throw AppException(
+          message: 'Il ruolo selezionato non è valido.',
+          code: 'ruolo_non_valido',
+        );
+      }
+
+      final account = await _client
+          .from('account')
+          .select('ruolo_account')
+          .eq('id', accountId)
+          .maybeSingle();
+      if (account == null) {
+        throw AppException.unexpected(
+          originalError: StateError('Account $accountId non trovato.'),
+        );
+      }
+      final ruoloCorrente = account['ruolo_account'] as String?;
+      if (ruoloCorrente != null && ruoloCorrente != ruolo) {
+        throw AppException(
+          message: 'Il ruolo non può essere modificato dopo la scelta.',
+          code: 'ruolo_gia_scelto',
+        );
+      }
+
+      final giocatoreEsistente = await _client
+          .from('giocatore')
+          .select('account_id')
+          .eq('account_id', accountId)
+          .maybeSingle();
+      final gestoreEsistente = await _client
+          .from('gestore_campo')
+          .select('account_id')
+          .eq('account_id', accountId)
+          .maybeSingle();
+      if (giocatoreEsistente != null || gestoreEsistente != null) {
+        throw AppException(
+          message: 'Il ruolo non può essere modificato dopo la scelta.',
+          code: 'ruolo_gia_scelto',
+        );
+      }
+
+      await _client
+          .from('account')
+          .update({'ruolo_account': ruolo})
+          .eq('id', accountId);
+      if (ruolo == RuoloAccount.giocatore) {
+        await _client.from('giocatore').insert({
+          'account_id': accountId,
+          'ruolo_preferito_in_campo': null,
+          'piede_dominante': null,
+        });
+      }
+    });
+  }
+
   @override
   Future<String> accedi(String email, String password) async {
     try {
