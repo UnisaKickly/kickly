@@ -12,7 +12,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/provider/autenticazione_provider.dart';
 import '../domain/autenticazione_control.dart';
-import 'stile_mockup.dart';
+import '../../../core/theme/tema_kickly.dart';
 
 /// Impostazioni dell'account con il comando di logout.
 class ImpostazioniAccount extends StatefulWidget {
@@ -63,7 +63,7 @@ class _ImpostazioniAccountState extends State<ImpostazioniAccount> {
   /// Applica lo stile dei mock-up del RAD (sfondo nero, accento #CAFF00).
   Widget build(BuildContext context) {
     return Theme(
-      data: temaMockup(),
+      data: TemaKickly.crea(),
       child: Builder(builder: _costruisci),
     );
   }
