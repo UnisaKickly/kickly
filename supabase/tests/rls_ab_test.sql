@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(145);
+SELECT plan(152);
 
 -- ---------------------------------------------------------------------------
 -- Funzioni di appoggio del test (schema temporaneo, spariscono a fine sessione)
@@ -258,6 +258,10 @@ SELECT throws_ok(
     '42501', NULL,
     'giocatore: account_id non e'' modificabile (GRANT per colonna)'
 );
+SELECT lives_ok(
+    $$DELETE FROM public.giocatore WHERE account_id = '20400000-0000-4000-8000-000000000001'$$,
+    'giocatore: la DELETE dal client non solleva errori ma e'' filtrata'
+);
 
 RESET ROLE;
 SELECT is(
@@ -269,6 +273,11 @@ SELECT is(
     (SELECT piede_dominante FROM public.giocatore WHERE account_id = '20400000-0000-4000-8000-000000000002'),
     'Sinistro',
     'giocatore: la Player Card altrui resta invariata'
+);
+SELECT is(
+    (SELECT count(*)::integer FROM public.giocatore WHERE account_id = '20400000-0000-4000-8000-000000000001'),
+    1,
+    'giocatore: dopo la DELETE dal client la riga Giocatore esiste ancora'
 );
 
 -- ===========================================================================
@@ -298,6 +307,10 @@ SELECT throws_ok(
     '42501', NULL,
     'gestore_campo: nessun UPDATE dal client'
 );
+SELECT lives_ok(
+    $$DELETE FROM public.gestore_campo WHERE account_id = '20400000-0000-4000-8000-000000000004'$$,
+    'gestore_campo: la DELETE dal client non solleva errori ma e'' filtrata'
+);
 
 SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
 SELECT is(
@@ -315,9 +328,18 @@ SELECT lives_ok(
     'gestore_campo: la service role scrive l''identificativo del fornitore'
 );
 
+RESET ROLE;
+SELECT is(
+    (SELECT count(*)::integer FROM public.gestore_campo WHERE account_id = '20400000-0000-4000-8000-000000000004'),
+    1,
+    'gestore_campo: dopo la DELETE dal client la riga del Gestore esiste ancora'
+);
+
 -- ===========================================================================
 -- dispositivo_registrato
 -- ===========================================================================
+SELECT pg_temp.imposta_jwt(NULL, 'service_role');
+SET LOCAL ROLE service_role;
 SELECT lives_ok(
     $$INSERT INTO public.dispositivo_registrato (account_id, identificativo, primo_accesso, ultimo_accesso)
       VALUES ('20400000-0000-4000-8000-000000000001', 'dispositivo-fittizio-server', now(), now())$$,
@@ -343,6 +365,11 @@ SELECT throws_ok(
     '42501', NULL,
     'dispositivo_registrato: il client non aggiorna i dispositivi'
 );
+SELECT throws_ok(
+    $$DELETE FROM public.dispositivo_registrato WHERE id = '20400000-0000-4000-8000-000000000101'$$,
+    '42501', NULL,
+    'dispositivo_registrato: il client non cancella i dispositivi'
+);
 
 SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
 SELECT is(
@@ -350,6 +377,17 @@ SELECT is(
     0,
     'dispositivo_registrato: un altro utente non legge i dispositivi altrui'
 );
+
+RESET ROLE;
+SELECT is(
+    (SELECT count(*)::integer FROM public.dispositivo_registrato WHERE id = '20400000-0000-4000-8000-000000000101'),
+    1,
+    'dispositivo_registrato: dopo la DELETE rifiutata il dispositivo esiste ancora'
+);
+
+-- La sezione lega parte con G2 autenticato.
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
+SET LOCAL ROLE authenticated;
 
 -- ===========================================================================
 -- lega
@@ -892,6 +930,12 @@ SELECT lives_ok(
     $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000302'$$,
     'prenotazione: l''organizzatore annulla la partita prima di liberare lo slot'
 );
+SELECT throws_ok(
+    $$UPDATE public.prenotazione SET stato_blocco = 'liberato'
+      WHERE id = '20400000-0000-4000-8000-000000000402'$$,
+    '42501', NULL,
+    'prenotazione: la liberazione che lascia la scadenza del blocco e'' rifiutata (D24)'
+);
 SELECT lives_ok(
     $$UPDATE public.prenotazione SET stato_blocco = 'liberato', scadenza_blocco = NULL
       WHERE id = '20400000-0000-4000-8000-000000000402'$$,
@@ -1256,12 +1300,16 @@ SELECT throws_ok(
 );
 
 -- La SET CONSTRAINTS fallita e' annullata con il suo savepoint e il controllo
--- su N3 resta in coda: si aggiunge la specializzazione, cosi' il caso valido
--- sotto verifica solo N4.
+-- su N3 resta in coda: si aggiunge la specializzazione, cosi' al prossimo
+-- controllo anche N3 e' valido.
 INSERT INTO public.giocatore (account_id) VALUES ('20400000-0000-4000-8000-000000000008');
 
 -- Caso valido: N4 completa l'onboarding e la specializzazione arriva dopo
--- l'UPDATE ma prima del controllo, come nel seed.
+-- l'UPDATE ma prima del controllo, come nel seed. SET CONSTRAINTS ... IMMEDIATE
+-- esegue tutti i controlli account_onboarding_completato in coda nella
+-- transazione, non solo quello di N4: anche quelli degli UPDATE di account
+-- fatti prima in questo file (dati fittizi G1-GC2, N3, nome di G1). Passano
+-- tutti perche' ogni account completato ha ormai la sua specializzazione.
 UPDATE public.account
 SET stato_onboarding = 'completato'
 WHERE id = '20400000-0000-4000-8000-000000000009';

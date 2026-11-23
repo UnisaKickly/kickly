@@ -503,6 +503,7 @@ CREATE POLICY prenotazione_update_organizzatore_libera
     )
     WITH CHECK (
         stato_blocco = 'liberato'
+        AND scadenza_blocco IS NULL
         AND EXISTS (
             SELECT 1
             FROM public.partita
@@ -517,11 +518,11 @@ CREATE POLICY prenotazione_update_organizzatore_libera
 -- non serve una funzione SECURITY DEFINER e non c'e' ricorsione, perche' le
 -- policy di partita non leggono prenotazione.
 COMMENT ON POLICY prenotazione_update_organizzatore_libera ON public.prenotazione IS
-    'L''organizzatore puo'' solo liberare lo slot, e solo dopo che la partita e'' passata ad Annullata (D6): altrimenti potrebbe liberare lo slot di una partita ancora Confermata e permettere una seconda prenotazione dello stesso campo. Il GRANT per colonna limita l''UPDATE a stato_blocco e scadenza_blocco (D24, nessun valore economico), gli importi restano esclusi.';
+    'L''organizzatore puo'' solo liberare lo slot, e solo dopo che la partita e'' passata ad Annullata (D6): altrimenti potrebbe liberare lo slot di una partita ancora Confermata e permettere una seconda prenotazione dello stesso campo. Liberando, la scadenza va azzerata (D24). Il GRANT per colonna limita l''UPDATE a stato_blocco e scadenza_blocco (D24, nessun valore economico), gli importi restano esclusi.';
 
 -- scadenza_blocco e' nel GRANT perche' chi libera lo slot azzera anche la
--- scadenza (D24); il WITH CHECK su 'liberato' impedisce di usarla per prolungare
--- un blocco.
+-- scadenza (D24); il WITH CHECK su 'liberato' e scadenza_blocco NULL impedisce
+-- di usarla per prolungare un blocco o di lasciare una scadenza sullo slot libero.
 REVOKE UPDATE ON public.prenotazione FROM authenticated, anon;
 GRANT UPDATE (stato_blocco, scadenza_blocco) ON public.prenotazione TO authenticated;
 
@@ -661,10 +662,22 @@ BEGIN
         ELSE 'GestoreCampo'
     END;
 
+    -- FOR UPDATE evita una race condition tra due transazioni concorrenti:
+    -- A cambia ruolo_account mentre B inserisce la specializzazione. Senza
+    -- blocco, B leggerebbe il ruolo vecchio ancora confermato e il trigger di A
+    -- (verifica_cambio_ruolo_account) non vedrebbe la riga di B non ancora
+    -- confermata: passerebbero entrambe, lasciando una specializzazione che non
+    -- corrisponde al ruolo. Con FOR UPDATE le due transazioni si mettono in fila
+    -- sulla riga di account: se A arriva prima, B attende il commit di A e
+    -- rilegge il ruolo nuovo (READ COMMITTED); se B arriva prima, l'UPDATE di A
+    -- attende il commit di B e il suo trigger, che apre un nuovo snapshot a ogni
+    -- query, vede la specializzazione e rifiuta. pgTAP non puo' provarlo: il
+    -- test gira in una sola transazione e servirebbe una seconda connessione.
     SELECT ruolo_account
     INTO ruolo_salvato
     FROM public.account
-    WHERE id = NEW.account_id;
+    WHERE id = NEW.account_id
+    FOR UPDATE;
 
     IF ruolo_salvato IS DISTINCT FROM ruolo_atteso THEN
         RAISE EXCEPTION 'La specializzazione % richiede il ruolo %', TG_TABLE_NAME, ruolo_atteso
