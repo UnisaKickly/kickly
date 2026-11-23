@@ -13,6 +13,9 @@
 // LegaRepository.findById() -> LegaRepository.isAmministratore() ->
 // LegaRepository.existsByNome() (solo se il nome cambia) ->
 // LegaRepository.updateLega() -> DashboardLega.
+// Elenco (VistaLeghe, KCK-249): VistaLeghe ->
+// GestioneLegaControl.visualizzaLeghe() -> LegaRepository.findByGiocatore()
+// -> LegaRepository.isAmministratore() per ogni lega.
 // La validazione dei dati sta qui, non nella GUI ne' nel repository (ticket
 // KCK-242). Nessun import di Flutter o di SDK esterni (DG9).
 import 'dart:math';
@@ -238,6 +241,28 @@ class GestioneLegaControl {
       }
       rethrow;
     }
+  }
+
+  /// Restituisce le leghe di cui il Giocatore e' membro, ciascuna con il suo
+  /// ruolo (VistaLeghe, UI_LEG_1: badge ADMIN o MEMBRO).
+  ///
+  /// [amministratore] e' true se il Giocatore e' amministratore della lega
+  /// (D13): la GUI lo usa solo per il badge, i permessi li ricontrolla il
+  /// Control a ogni operazione riservata. Gli errori (es. rete) arrivano come
+  /// AppException del repository.
+  Future<List<({Lega lega, bool amministratore})>> visualizzaLeghe(
+    String idGiocatore,
+  ) async {
+    final List<Lega> leghe = await _legaRepository.findByGiocatore(idGiocatore);
+    final List<bool> ruoli = await Future.wait(
+      leghe.map(
+        (Lega lega) => _legaRepository.isAmministratore(lega.id, idGiocatore),
+      ),
+    );
+    return [
+      for (var i = 0; i < leghe.length; i++)
+        (lega: leghe[i], amministratore: ruoli[i]),
+    ];
   }
 
   /// Normalizza un nome come l'indice univoco del database (D21).
