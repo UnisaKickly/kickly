@@ -60,6 +60,14 @@ class AutenticazioneControl {
   /// Dice se c'e' una sessione aperta.
   bool get autenticato => _accountRepository.idAccountAutenticato() != null;
 
+  /// Id dell'account con la sessione aperta, null se nessuno ha fatto
+  /// l'accesso.
+  ///
+  /// Serve alle Boundary che devono passare l'id del Giocatore ad altri
+  /// Control (es. FormLega -> GestioneLegaControl, KCK-249): i Control delle
+  /// leghe non dipendono da Gestione Utenza (component diagram dell'SDD).
+  String? get idAccountAutenticato => _accountRepository.idAccountAutenticato();
+
   /// Emette true o false a ogni cambio di sessione (login, logout o sessione
   /// chiusa dal servizio).
   ///

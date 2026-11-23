@@ -255,3 +255,11 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
   * **Password debole (E2):** una password e' valida se ha almeno 8 caratteri, con almeno una lettera e un numero. Altrimenti `PasswordDeboleException` con messaggio "La password deve avere almeno 8 caratteri, una lettera e un numero". La regola sta in una sola funzione del Domain, usata da `RegistrazioneControl` e da `RecuperoPasswordControl` (D16). Il minimo di 6 caratteri di `supabase/config.toml` resta come difesa del servizio.
   * **Chi li scrive:** i due metodi di `AccountRepository` li aggiunge l'autore di KCK-250 nella sua PR (interfaccia, implementazione Supabase e in memoria, test), con Pietro Senatore come revisore: e' un'eccezione alla regola sui repository di altri, decisa dai PM per non fermare lo sprint.
 * **Ticket coinvolti:** KCK-250 (registrazione Giocatore e Player Card); KCK-198 (schermate); KCK-234, KCK-262 (recupero password); KCK-223, KCK-227 (ramo Gestore); test frame TF_ACC_01, TF_ACC_04, TF_ACC_18 (KCK-232)
+
+---
+
+## D29 – Formato e durata del codice d'invito della lega
+
+* **Problema:** UC_LEG_1 passo 4 chiede di generare "un codice d'invito univoco" alla creazione della lega e la tabella degli oggetti dice che `Lega` contiene il codice e la sua scadenza, ma il RAD non dice ne' il formato ne' la durata; nel database codice e scadenza sono obbligatori insieme (CHECK `lega_codice_invito_scadenza_check`).
+* **Decisione:** Il codice ha 8 caratteri scelti tra lettere maiuscole e cifre, senza quelli facili da confondere (0/O, 1/I), generati con `Random.secure()` di `dart:math` (nessuna dipendenza nuova). La scadenza e' di 7 giorni dalla creazione. Lo genera `GestioneLegaControl`; se il database rifiuta il codice perche' gia' usato, il Control ne genera un altro.
+* **Ticket coinvolti:** KCK-242 (creazione lega); KCK-256 (generazione e condivisione dell'invito, adesione)

@@ -246,4 +246,9 @@ class SupabaseLegaRepository implements LegaRepository {
       });
     });
   }
+
+  @override
+  Future<bool> isAmministratore(String legaId, String giocatoreId) {
+    return _execute(() => _isAdmin(legaId, giocatoreId));
+  }
 }
