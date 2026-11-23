@@ -13,7 +13,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/provider/gestione_lega_provider.dart';
-import '../../utenza/presentation/stile_mockup.dart';
+import '../../../core/theme/tema_kickly.dart';
 import '../domain/lega.dart';
 
 /// Sezione "Leghe" con le leghe del Giocatore (UI_LEG_1).
@@ -95,7 +95,7 @@ class _VistaLegheState extends ConsumerState<VistaLeghe> {
   /// Costruisce la sezione con lo stile dei mock-up del RAD.
   Widget build(BuildContext context) {
     return Theme(
-      data: temaMockup(),
+      data: TemaKickly.crea(),
       child: Builder(
         builder: (BuildContext context) {
           final TextTheme testo = Theme.of(context).textTheme;
@@ -124,8 +124,8 @@ class _VistaLegheState extends ConsumerState<VistaLeghe> {
                           style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(52),
                             shape: const StadiumBorder(),
-                            side: const BorderSide(color: ColoriMockup.bordo),
-                            foregroundColor: ColoriMockup.testo,
+                            side: const BorderSide(color: ColoriKickly.bordo),
+                            foregroundColor: ColoriKickly.testo,
                           ),
                           child: const Text('Unisciti'),
                         ),
@@ -160,7 +160,7 @@ class _VistaLegheState extends ConsumerState<VistaLeghe> {
         Text(
           _errore!,
           key: const Key('vista_leghe_errore'),
-          style: const TextStyle(color: ColoriMockup.errore),
+          style: const TextStyle(color: ColoriKickly.errore),
         ),
         const SizedBox(height: 8),
         Align(
@@ -214,7 +214,7 @@ class _VistaLegheState extends ConsumerState<VistaLeghe> {
                     child: Text(
                       lega.nome,
                       style: const TextStyle(
-                        color: ColoriMockup.testo,
+                        color: ColoriKickly.testo,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),
@@ -223,7 +223,7 @@ class _VistaLegheState extends ConsumerState<VistaLeghe> {
                   Text(
                     amministratore ? 'ADMIN' : 'MEMBRO',
                     style: const TextStyle(
-                      color: ColoriMockup.testoSecondario,
+                      color: ColoriKickly.testoSecondario,
                       fontSize: 12,
                       letterSpacing: 1.2,
                       fontWeight: FontWeight.w600,
@@ -234,7 +234,7 @@ class _VistaLegheState extends ConsumerState<VistaLeghe> {
               const SizedBox(height: 6),
               Text(
                 'Calcio a $perSquadra · $privacy',
-                style: const TextStyle(color: ColoriMockup.testoSecondario),
+                style: const TextStyle(color: ColoriKickly.testoSecondario),
               ),
             ],
           ),

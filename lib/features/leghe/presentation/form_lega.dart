@@ -14,7 +14,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/provider/gestione_lega_provider.dart';
-import '../../utenza/presentation/stile_mockup.dart';
+import '../../../core/theme/tema_kickly.dart';
 import '../domain/gestione_lega_control.dart';
 import '../domain/lega.dart';
 
@@ -192,7 +192,7 @@ class _FormLegaState extends ConsumerState<FormLega> {
   /// Costruisce il modulo con lo stile dei mock-up del RAD.
   Widget build(BuildContext context) {
     return Theme(
-      data: temaMockup(),
+      data: TemaKickly.crea(),
       child: Builder(
         builder: (BuildContext context) {
           final TextTheme testo = Theme.of(context).textTheme;
@@ -233,7 +233,7 @@ class _FormLegaState extends ConsumerState<FormLega> {
                             // Limite di UI_LEG_2; lo ricontrolla il Control.
                             maxLength: GestioneLegaControl.lunghezzaMassimaNome,
                             textInputAction: TextInputAction.done,
-                            style: const TextStyle(color: ColoriMockup.testo),
+                            style: const TextStyle(color: ColoriKickly.testo),
                             decoration: InputDecoration(
                               hintText: 'Champions del Giovedì',
                               helperText:
@@ -255,11 +255,11 @@ class _FormLegaState extends ConsumerState<FormLega> {
                             style: TextStyle(
                               fontSize: 12,
                               color: _erroreTipologia == null
-                                  ? ColoriMockup.testoSecondario
-                                  : ColoriMockup.errore,
+                                  ? ColoriKickly.testoSecondario
+                                  : ColoriKickly.errore,
                             ),
                           ),
-                          const Divider(height: 32, color: ColoriMockup.bordo),
+                          const Divider(height: 32, color: ColoriKickly.bordo),
                           _interruttorePrivacy(),
                         ],
                       ),
@@ -281,7 +281,7 @@ class _FormLegaState extends ConsumerState<FormLega> {
                           _erroreGenerale!,
                           key: const Key('form_lega_errore'),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: ColoriMockup.errore),
+                          style: const TextStyle(color: ColoriKickly.errore),
                         ),
                       ),
                     FilledButton(
@@ -334,15 +334,15 @@ class _FormLegaState extends ConsumerState<FormLega> {
             selected: _tipologiaMatch == formato,
             showCheckmark: false,
             shape: const StadiumBorder(
-              side: BorderSide(color: ColoriMockup.bordo),
+              side: BorderSide(color: ColoriKickly.bordo),
             ),
-            backgroundColor: ColoriMockup.card,
-            selectedColor: ColoriMockup.accento,
+            backgroundColor: ColoriKickly.card,
+            selectedColor: ColoriKickly.accento,
             labelStyle: TextStyle(
               fontWeight: FontWeight.w600,
               color: _tipologiaMatch == formato
                   ? Colors.black
-                  : ColoriMockup.testo,
+                  : ColoriKickly.testo,
             ),
             onSelected: _caricamento
                 ? null
@@ -360,7 +360,7 @@ class _FormLegaState extends ConsumerState<FormLega> {
       contentPadding: EdgeInsets.zero,
       value: privata,
       activeThumbColor: Colors.black,
-      activeTrackColor: ColoriMockup.accento,
+      activeTrackColor: ColoriKickly.accento,
       onChanged: _caricamento
           ? null
           : (bool valore) => setState(
@@ -371,7 +371,7 @@ class _FormLegaState extends ConsumerState<FormLega> {
       title: Text(
         privata ? 'Lega privata' : 'Lega pubblica',
         style: const TextStyle(
-          color: ColoriMockup.testo,
+          color: ColoriKickly.testo,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -384,8 +384,8 @@ class _FormLegaState extends ConsumerState<FormLega> {
                       'anche senza codice d\'invito.'),
         style: TextStyle(
           color: _errorePrivacy == null
-              ? ColoriMockup.testoSecondario
-              : ColoriMockup.errore,
+              ? ColoriKickly.testoSecondario
+              : ColoriKickly.errore,
         ),
       ),
     );
