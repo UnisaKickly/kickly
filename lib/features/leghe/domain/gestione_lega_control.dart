@@ -13,6 +13,9 @@
 // LegaRepository.findById() -> LegaRepository.isAmministratore() ->
 // LegaRepository.existsByNome() (solo se il nome cambia) ->
 // LegaRepository.updateLega() -> DashboardLega.
+// Elenco (VistaLeghe, KCK-249): VistaLeghe ->
+// GestioneLegaControl.visualizzaLeghe() -> LegaRepository.findByGiocatore()
+// -> LegaRepository.isAmministratore() per ogni lega.
 // La validazione dei dati sta qui, non nella GUI ne' nel repository (ticket
 // KCK-242). Nessun import di Flutter o di SDK esterni (DG9).
 import 'dart:math';
@@ -27,8 +30,14 @@ import 'lega_repository.dart';
 class DatiLegaNonValidiException extends AppException {
   /// Crea l'errore per il campo indicato: [nome], [tipologiaMatch] o
   /// [privacy].
-  DatiLegaNonValidiException(this.campo)
-    : super(message: _messaggioPer(campo), code: 'dati_lega_non_validi');
+  ///
+  /// [messaggio] sostituisce il messaggio predefinito del campo quando lo
+  /// stesso campo puo' essere sbagliato in piu' modi (es. nome troppo lungo).
+  DatiLegaNonValidiException(this.campo, {String? messaggio})
+    : super(
+        message: messaggio ?? _messaggioPer(campo),
+        code: 'dati_lega_non_validi',
+      );
 
   /// Nome del campo nome della lega.
   static const nome = 'nome';
@@ -99,6 +108,13 @@ class GestioneLegaControl {
   ///
   /// Il RAD non dice la durata: 7 giorni dalla creazione (D29).
   static const durataCodiceInvito = Duration(days: 7);
+
+  /// Lunghezza massima del nome della lega, in caratteri.
+  ///
+  /// Il limite e' nel mock-up UI_LEG_2 ("Massimo 30 caratteri"), che fa parte
+  /// del RAD (§3.4.6); richiesto dai PM nel commento 11246 di KCK-249. Vale in
+  /// creazione e in modifica; FormLega lo usa anche come `maxLength`.
+  static const lunghezzaMassimaNome = 30;
 
   /// Lunghezza del codice d'invito (D29).
   static const lunghezzaCodiceInvito = 8;
@@ -240,6 +256,28 @@ class GestioneLegaControl {
     }
   }
 
+  /// Restituisce le leghe di cui il Giocatore e' membro, ciascuna con il suo
+  /// ruolo (VistaLeghe, UI_LEG_1: badge ADMIN o MEMBRO).
+  ///
+  /// [amministratore] e' true se il Giocatore e' amministratore della lega
+  /// (D13): la GUI lo usa solo per il badge, i permessi li ricontrolla il
+  /// Control a ogni operazione riservata. Gli errori (es. rete) arrivano come
+  /// AppException del repository.
+  Future<List<({Lega lega, bool amministratore})>> visualizzaLeghe(
+    String idGiocatore,
+  ) async {
+    final List<Lega> leghe = await _legaRepository.findByGiocatore(idGiocatore);
+    final List<bool> ruoli = await Future.wait(
+      leghe.map(
+        (Lega lega) => _legaRepository.isAmministratore(lega.id, idGiocatore),
+      ),
+    );
+    return [
+      for (var i = 0; i < leghe.length; i++)
+        (lega: leghe[i], amministratore: ruoli[i]),
+    ];
+  }
+
   /// Normalizza un nome come l'indice univoco del database (D21).
   String _normalizzaNome(String nome) => nome.trim().toLowerCase();
 
@@ -249,6 +287,15 @@ class GestioneLegaControl {
   void _validaDati(String nome, String tipologiaMatch, String privacy) {
     if (nome.isEmpty) {
       throw DatiLegaNonValidiException(DatiLegaNonValidiException.nome);
+    }
+    // Si contano i caratteri (rune), non le unita' UTF-16: una lettera
+    // accentata o un'emoji valgono un carattere.
+    if (nome.runes.length > lunghezzaMassimaNome) {
+      throw DatiLegaNonValidiException(
+        DatiLegaNonValidiException.nome,
+        messaggio:
+            'Il nome puo\' avere al massimo $lunghezzaMassimaNome caratteri',
+      );
     }
     if (!TipologiaMatch.valori.contains(tipologiaMatch)) {
       throw DatiLegaNonValidiException(
