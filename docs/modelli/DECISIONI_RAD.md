@@ -89,6 +89,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Problema:** `ruolo_account` e le tabelle `giocatore` e `gestore_campo` non sono legate nel database, mentre RF_ACC_1 e RF_ACC_2 dicono che la scelta del ruolo e' definitiva.
 * **Decisione:** Il vincolo non si mette in un trigger della migration. `ruolo_account` resta nullo fino all'onboarding e lo imposta una sola volta il Control di registrazione, che crea nello stesso passo la riga di `giocatore` o di `gestore_campo`. Che il ruolo non si possa piu' modificare si garantisce con le policy RLS, che nel ticket RLS vietano l'aggiornamento di `ruolo_account` quando e' gia' valorizzato.
 * **Ticket coinvolti:** KCK-202; KCK-250 (RF_ACC_2); ticket RLS
+* **Aggiornamento (23/11/2026, KCK-226):** il vincolo si realizza con un trigger nella migration RLS e non con le policy, perche' una policy RLS non confronta il valore precedente con quello nuovo (decisione dei PM). Il trigger `account_ruolo_definitivo` (funzione `verifica_cambio_ruolo_account()`) rifiuta il cambio di `ruolo_account` quando `stato_onboarding` e' `completato`, e rifiuta il ritorno di `stato_onboarding` da `completato` a `in_corso`, che permetterebbe di aggirare la regola (D9 prevede solo `in_corso` -> `completato`). Finche' l'onboarding e' `in_corso` il ruolo si puo' ancora modificare.
 
 ---
 

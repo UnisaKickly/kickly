@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(115);
+SELECT plan(127);
 
 -- ---------------------------------------------------------------------------
 -- Funzioni di appoggio del test (schema temporaneo, spariscono a fine sessione)
@@ -997,6 +997,108 @@ SELECT throws_ok(
                               '20400000-0000-4000-8000-000000000001'::uuid)$$,
     '42501', NULL,
     'crea_lega: un utente non autenticato non puo'' eseguire la funzione'
+);
+
+-- ###########################################################################
+-- ###########################################################################
+-- ##                                                                       ##
+-- ##  SEZIONE trigger - D11 (ruolo definitivo), D2 (gol e assist),         ##
+-- ##  stato della partita                                                  ##
+-- ##                                                                       ##
+-- ###########################################################################
+-- ###########################################################################
+RESET ROLE;
+
+-- ===========================================================================
+-- account: ruolo definitivo (D11)
+-- ===========================================================================
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+    $$UPDATE public.account SET ruolo_account = 'GestoreCampo' WHERE id = '20400000-0000-4000-8000-000000000001'$$,
+    '42501', NULL,
+    'account: D11, il ruolo non cambia dopo l''onboarding completato'
+);
+SELECT throws_ok(
+    $$UPDATE public.account SET stato_onboarding = 'in_corso' WHERE id = '20400000-0000-4000-8000-000000000001'$$,
+    '42501', NULL,
+    'account: D11, un onboarding completato non torna in corso'
+);
+
+-- ===========================================================================
+-- partecipazione: gol e assist (D2)
+-- ===========================================================================
+SELECT throws_ok(
+    $$UPDATE public.partecipazione SET gol_partita = 1 WHERE id = '20400000-0000-4000-8000-000000000504'$$,
+    '23514', NULL,
+    'partecipazione: gol e assist solo a partita Conclusa (D2)'
+);
+
+-- L'Edge Function RSVP aggiorna risposta_stato con la service role.
+RESET ROLE;
+SELECT pg_temp.imposta_jwt(NULL, 'service_role');
+SET LOCAL ROLE service_role;
+SELECT lives_ok(
+    $$UPDATE public.partecipazione SET risposta_stato = 'ritirata' WHERE id = '20400000-0000-4000-8000-000000000504'$$,
+    'partecipazione: la service role aggiorna risposta_stato senza intervento del trigger'
+);
+SELECT throws_ok(
+    $$UPDATE public.partecipazione SET gol_partita = 3 WHERE id = '20400000-0000-4000-8000-000000000501'$$,
+    '42501', NULL,
+    'partecipazione: gol e assist li inserisce solo l''organizzatore, non la service role (D2)'
+);
+
+-- ===========================================================================
+-- partita: passaggi di stato (statechart, D1, D5, D6, D26)
+-- ===========================================================================
+RESET ROLE;
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT throws_ok(
+    $$UPDATE public.partita SET stato = 'Conclusa' WHERE id = '20400000-0000-4000-8000-000000000304'$$,
+    '42501', NULL,
+    'partita: il client non porta la partita a Conclusa (D1)'
+);
+SELECT throws_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000305'$$,
+    '42501', NULL,
+    'partita: l''annullamento a meno di 24 ore e'' rifiutato (D5)'
+);
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Aperta', num_partecipanti_richiesti = 12
+      WHERE id = '20400000-0000-4000-8000-000000000304'$$,
+    'partita: l''UPDATE dell''organizzatore che non cambia lo stato e'' accettato'
+);
+
+RESET ROLE;
+SELECT is(
+    (SELECT stato || '/' || num_partecipanti_richiesti FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000304'),
+    'Aperta/12',
+    'partita: l''UPDATE senza cambio di stato e'' salvato e i passaggi rifiutati non hanno cambiato lo stato'
+);
+
+-- Il trigger rifiuta anche chi non organizza. Dal client la RLS filtra gia'
+-- la riga (sezione B): qui si esegue come postgres, che scavalca la RLS, con
+-- il JWT di G2, per verificare la condizione del trigger da sola.
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000002', 'authenticated');
+SELECT throws_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000304'$$,
+    '42501', NULL,
+    'partita: il trigger rifiuta l''annullamento da parte di chi non organizza'
+);
+
+-- I passaggi automatici li fa il server con la service role.
+SELECT pg_temp.imposta_jwt(NULL, 'service_role');
+SET LOCAL ROLE service_role;
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Completa' WHERE id = '20400000-0000-4000-8000-000000000305'$$,
+    'partita: la service role cambia lo stato senza limiti'
+);
+RESET ROLE;
+SELECT is(
+    (SELECT stato FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000305'),
+    'Completa',
+    'partita: il cambio di stato della service role e'' salvato'
 );
 
 RESET ROLE;

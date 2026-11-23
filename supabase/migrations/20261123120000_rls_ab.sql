@@ -568,3 +568,138 @@ COMMENT ON POLICY partecipazione_update_organizzatore ON public.partecipazione I
 
 REVOKE INSERT, UPDATE, DELETE ON public.partecipazione FROM authenticated, anon;
 GRANT UPDATE (gol_partita, assist_partita) ON public.partecipazione TO authenticated;
+
+-- ###########################################################################
+-- ###########################################################################
+-- ##                                                                       ##
+-- ##  SEZIONE 3 - Trigger                                                  ##
+-- ##  D11 (ruolo definitivo), D2 (gol e assist), stato della partita       ##
+-- ##                                                                       ##
+-- ###########################################################################
+-- ###########################################################################
+
+-- ---------------------------------------------------------------------------
+-- account: ruolo definitivo (D11)
+-- ---------------------------------------------------------------------------
+-- D11: il ruolo e' definitivo dopo l'onboarding. Una policy non vede il valore
+-- precedente della riga, quindi il controllo sta in un trigger (decisione dei PM).
+-- Il trigger rifiuta anche il ritorno di stato_onboarding da completato a
+-- in_corso: altrimenti basterebbero due UPDATE per cambiare ruolo (D9 prevede
+-- solo il passaggio da in_corso a completato).
+CREATE FUNCTION public.verifica_cambio_ruolo_account()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF OLD.stato_onboarding = 'completato' THEN
+        IF NEW.ruolo_account IS DISTINCT FROM OLD.ruolo_account THEN
+            RAISE EXCEPTION 'Il ruolo dell''account e'' definitivo dopo l''onboarding'
+                USING ERRCODE = '42501';
+        END IF;
+
+        IF NEW.stato_onboarding IS DISTINCT FROM OLD.stato_onboarding THEN
+            RAISE EXCEPTION 'Un onboarding completato non puo'' tornare in corso'
+                USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.verifica_cambio_ruolo_account() IS
+    'D11: a onboarding completato rifiuta il cambio di ruolo_account e il ritorno di stato_onboarding a in_corso, che permetterebbe di aggirare la regola.';
+
+CREATE TRIGGER account_ruolo_definitivo
+BEFORE UPDATE ON public.account
+FOR EACH ROW
+EXECUTE FUNCTION public.verifica_cambio_ruolo_account();
+
+-- ---------------------------------------------------------------------------
+-- partecipazione: gol e assist (D2)
+-- ---------------------------------------------------------------------------
+-- D2: gol e assist li inserisce l'organizzatore a partita Conclusa. Il trigger
+-- interviene solo quando cambiano gol o assist, cosi' l'Edge Function RSVP puo'
+-- aggiornare risposta_stato con la service role. E' SECURITY DEFINER per leggere
+-- la partita senza dipendere dalla RLS di chi esegue l'UPDATE.
+CREATE FUNCTION public.verifica_modifica_gol_assist()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    organizzatore_id uuid;
+    stato_partita text;
+BEGIN
+    IF NEW.gol_partita IS NOT DISTINCT FROM OLD.gol_partita
+       AND NEW.assist_partita IS NOT DISTINCT FROM OLD.assist_partita THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT giocatore_id, stato
+    INTO organizzatore_id, stato_partita
+    FROM public.partita
+    WHERE id = NEW.partita_id;
+
+    IF auth.uid() IS NULL OR auth.uid() <> organizzatore_id THEN
+        RAISE EXCEPTION 'Solo l''organizzatore inserisce gol e assist'
+            USING ERRCODE = '42501';
+    END IF;
+
+    IF stato_partita <> 'Conclusa' THEN
+        RAISE EXCEPTION 'Gol e assist si inseriscono solo a partita Conclusa'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION public.verifica_modifica_gol_assist() IS
+    'D2: accetta modifiche a gol_partita e assist_partita solo dall''organizzatore e solo a partita Conclusa; non interviene sugli altri aggiornamenti (risposta_stato dell''Edge Function RSVP).';
+
+CREATE TRIGGER partecipazione_gol_assist_organizzatore
+BEFORE UPDATE ON public.partecipazione
+FOR EACH ROW
+EXECUTE FUNCTION public.verifica_modifica_gol_assist();
+
+-- ---------------------------------------------------------------------------
+-- partita: passaggi di stato (statechart, D1, D5, D6, D26)
+-- ---------------------------------------------------------------------------
+-- L'unico passaggio di stato fatto dal client e' l'annullamento
+-- dell'organizzatore, almeno 24 ore prima (D5). Gli altri passaggi li fa il
+-- server con la service role (auth.uid() NULL). Si usa OLD.data_ora, cosi' il
+-- limite non si aggira spostando la data nello stesso UPDATE. UPDATE OF stato
+-- scatta anche quando la colonna e' nella SET con lo stesso valore, quindi si
+-- controlla che lo stato cambi davvero.
+CREATE FUNCTION public.verifica_cambio_stato_partita()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.stato IS NOT DISTINCT FROM OLD.stato OR auth.uid() IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF NEW.stato = 'Annullata'
+       AND OLD.stato IN ('Aperta', 'Completa', 'Confermata')
+       AND auth.uid() = OLD.giocatore_id
+       AND OLD.data_ora - now() > interval '24 hours' THEN
+        RETURN NEW;
+    END IF;
+
+    RAISE EXCEPTION 'Dal client e'' ammesso solo l''annullamento della partita da parte dell''organizzatore, almeno 24 ore prima'
+        USING ERRCODE = '42501';
+END;
+$$;
+
+COMMENT ON FUNCTION public.verifica_cambio_stato_partita() IS
+    'Statechart, D1, D5, D6, D26: per un utente autenticato ammette solo il passaggio ad Annullata da Aperta, Completa o Confermata, fatto dall''organizzatore almeno 24 ore prima di data_ora; il server (auth.uid() NULL) non ha limiti.';
+
+CREATE TRIGGER partita_cambio_stato_consentito
+BEFORE UPDATE OF stato ON public.partita
+FOR EACH ROW
+EXECUTE FUNCTION public.verifica_cambio_stato_partita();
