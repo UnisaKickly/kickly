@@ -1,13 +1,18 @@
 // Control GestioneLegaControl della tabella degli oggetti del RAD
 // (§3.4.4.1.2): realizza UC_LEG_1 passi 1-4 (RF_LEG_1), cioe' validazione,
 // controllo dei nomi duplicati, registrazione della lega e nomina
-// dell'Amministratore.
+// dell'Amministratore, ed e' esteso alla modifica dei dettagli della lega
+// (RF_LEG_1).
 //
 // Per questo flusso non c'e' un sequence diagram; l'ordine delle chiamate e':
 // FormLega -> GestioneLegaControl.creaLega() -> LegaRepository.existsByNome()
 // -> LegaRepository.findByCodiceInvito() -> LegaRepository.createLega() ->
 // DashboardLega. Se createLega rifiuta un duplicato, il Control richiama
 // existsByNome() per capire se il duplicato e' il nome o il codice d'invito.
+// Modifica: FormLega -> GestioneLegaControl.modificaDettagliLega() ->
+// LegaRepository.findById() -> LegaRepository.isAmministratore() ->
+// LegaRepository.existsByNome() (solo se il nome cambia) ->
+// LegaRepository.updateLega() -> DashboardLega.
 // La validazione dei dati sta qui, non nella GUI ne' nel repository (ticket
 // KCK-242). Nessun import di Flutter o di SDK esterni (DG9).
 import 'dart:math';
@@ -62,7 +67,20 @@ class NomeLegaGiaInUsoException extends AppException {
   String get campo => DatiLegaNonValidiException.nome;
 }
 
-/// Gestisce la creazione di una lega (UC_LEG_1 passi 1-4, RF_LEG_1).
+/// Operazione riservata agli amministratori chiesta da chi non lo e' (D13).
+///
+/// La GUI non mostra il comando a chi non e' amministratore; questo errore
+/// copre una richiesta arrivata comunque (TF_LEG_07).
+class OperazioneNonPermessaException extends AppException {
+  /// Crea l'errore con il messaggio per l'utente.
+  OperazioneNonPermessaException()
+    : super(
+        message: 'Solo un amministratore puo\' modificare la lega',
+        code: 'operazione_non_permessa',
+      );
+}
+
+/// Gestisce creazione e modifica di una lega (UC_LEG_1 passi 1-4, RF_LEG_1).
 ///
 /// Legge e scrive i dati solo tramite LegaRepository. L'id del Giocatore lo
 /// passa la GUI: nel component diagram dell'SDD il Control delle leghe non
@@ -79,11 +97,10 @@ class GestioneLegaControl {
 
   /// Durata del codice d'invito generato alla creazione.
   ///
-  /// Valore provvisorio: il RAD non dice la durata (domanda ai PM nel
-  /// commento Jira di KCK-242).
+  /// Il RAD non dice la durata: 7 giorni dalla creazione (D29).
   static const durataCodiceInvito = Duration(days: 7);
 
-  /// Lunghezza del codice d'invito (provvisoria, come [durataCodiceInvito]).
+  /// Lunghezza del codice d'invito (D29).
   static const lunghezzaCodiceInvito = 8;
 
   /// Caratteri del codice d'invito: lettere maiuscole e cifre senza quelli
@@ -162,6 +179,69 @@ class GestioneLegaControl {
       }
     }
   }
+
+  /// Aggiorna nome, tipologia e privacy di una lega esistente (RF_LEG_1).
+  ///
+  /// Solo un amministratore della lega puo' modificarla (D13). Il nome deve
+  /// restare unico come in creazione (D17, D21): tenere lo stesso nome, anche
+  /// cambiando solo maiuscole o spazi, e' permesso. Codice d'invito e
+  /// scadenza restano invariati. Restituisce la lega aggiornata, che la GUI
+  /// mostra nella DashboardLega.
+  /// Lancia [DatiLegaNonValidiException], [NomeLegaGiaInUsoException] o
+  /// [OperazioneNonPermessaException]; se la lega non esiste lancia
+  /// un'AppException.
+  Future<Lega> modificaDettagliLega({
+    required String idLega,
+    required String nome,
+    required String tipologiaMatch,
+    required String privacy,
+    required String idGiocatore,
+  }) async {
+    final String nomePulito = nome.trim();
+    _validaDati(nomePulito, tipologiaMatch, privacy);
+
+    final Lega? legaAttuale = await _legaRepository.findById(idLega);
+    if (legaAttuale == null) {
+      throw AppException.database(
+        message: 'Lega non trovata',
+        code: 'lega_non_trovata',
+      );
+    }
+    if (!await _legaRepository.isAmministratore(idLega, idGiocatore)) {
+      throw OperazioneNonPermessaException();
+    }
+
+    // Il proprio nome non conta come duplicato: existsByNome lo troverebbe.
+    final bool nomeCambiato =
+        _normalizzaNome(nomePulito) != _normalizzaNome(legaAttuale.nome);
+    if (nomeCambiato && await _legaRepository.existsByNome(nomePulito)) {
+      throw NomeLegaGiaInUsoException();
+    }
+
+    final Lega legaModificata = Lega(
+      id: legaAttuale.id,
+      nome: nomePulito,
+      tipologiaMatch: tipologiaMatch,
+      privacy: privacy,
+      codiceInvito: legaAttuale.codiceInvito,
+      scadenzaCodiceInvito: legaAttuale.scadenzaCodiceInvito,
+    );
+    try {
+      return await _legaRepository.updateLega(legaModificata);
+    } on AppException catch (error, stackTrace) {
+      // Un'altra lega ha preso lo stesso nome nel frattempo (indice UNIQUE).
+      if (error.code == _codiceDuplicato) {
+        throw NomeLegaGiaInUsoException(
+          originalError: error,
+          stackTrace: stackTrace,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Normalizza un nome come l'indice univoco del database (D21).
+  String _normalizzaNome(String nome) => nome.trim().toLowerCase();
 
   /// Controlla i dati del modulo nell'ordine dei campi di FormLega.
   ///

@@ -147,4 +147,9 @@ class InMemoryLegaRepository implements LegaRepository {
     }
     _amministratori[legaId]!.add(giocatoreId);
   }
+
+  @override
+  Future<bool> isAmministratore(String legaId, String giocatoreId) async {
+    return _amministratori[legaId]?.contains(giocatoreId) ?? false;
+  }
 }

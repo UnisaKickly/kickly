@@ -242,3 +242,11 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
 * **Problema:** RAD e class diagram non elencano i valori di `VotazioneMVP.statoVotazione`, `Notifica.tipo` e `Transazione.stato`; la regola 2 di `class_diagram_sdd.md` chiede un CHECK sui valori ammessi (KCK-218).
 * **Decisione:** `statoVotazione` = `aperta` (si apre quando la partita passa a Conclusa, D1), `chiusa` (alla scadenza o a voti completati, con `vincitore` assegnato). `Notifica.tipo` = `apertura_sondaggio_mvp`, `apertura_convocazioni` (RF_NOT_1) e `partita_confermata` (D26, C20); un nuovo tipo si aggiunge con una migration quando un ticket lo richiede. `Transazione.stato` = `in_attesa`, `completata`, `fallita`. `Quota.statoVersamento` resta come in D25. Le tabelle si chiamano `votazione_mvp`, `preferenza_voto_mvp` (la mappa `preferenzeVotanteVotato`, chiave primaria (votazione, votante) e CHECK contro l'autovoto come seconda difesa di D14), `notifica`, `quota`, `transazione`; al massimo un pagamento non fallito per Quota (indice univoco parziale, DG2): un pagamento `fallita` non ha addebitato nulla e il Giocatore puo' riprovare.
 * **Ticket coinvolti:** KCK-218 (migration C); KCK-211 (repository C); KCK-252 (entity VotazioneMVP, Notifica, Quota, Transazione)
+
+---
+
+## D29 – Formato e durata del codice d'invito della lega
+
+* **Problema:** UC_LEG_1 passo 4 chiede di generare "un codice d'invito univoco" alla creazione della lega e la tabella degli oggetti dice che `Lega` contiene il codice e la sua scadenza, ma il RAD non dice ne' il formato ne' la durata; nel database codice e scadenza sono obbligatori insieme (CHECK `lega_codice_invito_scadenza_check`).
+* **Decisione:** Il codice ha 8 caratteri scelti tra lettere maiuscole e cifre, senza quelli facili da confondere (0/O, 1/I), generati con `Random.secure()` di `dart:math` (nessuna dipendenza nuova). La scadenza e' di 7 giorni dalla creazione. Lo genera `GestioneLegaControl`; se il database rifiuta il codice perche' gia' usato, il Control ne genera un altro.
+* **Ticket coinvolti:** KCK-242 (creazione lega); KCK-256 (generazione e condivisione dell'invito, adesione)
