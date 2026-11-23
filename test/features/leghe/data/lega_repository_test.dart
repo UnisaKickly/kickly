@@ -182,6 +182,42 @@ void main() {
     );
   });
 
+  test('isAmministratore distingue amministratori e membri', () async {
+    final repository = InMemoryLegaRepository();
+    final created = await repository.createLega(lega(), 'giocatore-1');
+    await repository.aggiungiMembro(created.id, 'giocatore-2');
+
+    expect(
+      await repository.isAmministratore(created.id, 'giocatore-1'),
+      isTrue,
+    );
+    expect(
+      await repository.isAmministratore(created.id, 'giocatore-2'),
+      isFalse,
+    );
+    expect(await repository.isAmministratore('lega-assente', 'x'), isFalse);
+  });
+
+  test('Supabase isAmministratore legge amministratore_lega', () async {
+    var path = '';
+    var query = '';
+    final result = await _withLegaSupabase(
+      (repository) => repository.isAmministratore('lega-1', 'giocatore-1'),
+      (request) async {
+        path = request.uri.path;
+        query = request.uri.query;
+        await _RestServer().respond(request, 200, {
+          'giocatore_id': 'giocatore-1',
+        });
+      },
+    );
+
+    expect(path, '/rest/v1/amministratore_lega');
+    expect(query, contains('lega_id=eq.lega-1'));
+    expect(query, contains('giocatore_id=eq.giocatore-1'));
+    expect(result, isTrue);
+  });
+
   test('Supabase createLega invoca la RPC e mappa la risposta', () async {
     final source = lega(id: 'ignored-by-rpc');
     final response = lega(id: 'lega-rpc-id').toJson();

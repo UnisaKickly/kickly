@@ -38,4 +38,10 @@ abstract interface class LegaRepository {
 
   /// Promuove un membro esistente ad amministratore.
   Future<void> promuoviAdAdmin(String legaId, String giocatoreId);
+
+  /// Dice se il giocatore e' amministratore della lega.
+  ///
+  /// Serve ai Control per rifiutare le operazioni riservate agli
+  /// amministratori (D13); lato server il controllo lo fa anche la RLS.
+  Future<bool> isAmministratore(String legaId, String giocatoreId);
 }
