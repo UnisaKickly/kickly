@@ -230,11 +230,18 @@ class _FormLegaState extends ConsumerState<FormLega> {
                             key: const Key('form_lega_nome'),
                             controller: _nome,
                             enabled: !_caricamento,
+                            // Limite di UI_LEG_2; lo ricontrolla il Control.
+                            maxLength: GestioneLegaControl.lunghezzaMassimaNome,
                             textInputAction: TextInputAction.done,
                             style: const TextStyle(color: ColoriMockup.testo),
                             decoration: InputDecoration(
                               hintText: 'Champions del Giovedì',
-                              helperText: 'Modificabile in seguito.',
+                              helperText:
+                                  'Massimo '
+                                  '${GestioneLegaControl.lunghezzaMassimaNome}'
+                                  ' caratteri, modificabile in seguito.',
+                              // Il contatore "n/30" non c'e' nel mock-up.
+                              counterText: '',
                               errorText: _erroreNome,
                             ),
                           ),

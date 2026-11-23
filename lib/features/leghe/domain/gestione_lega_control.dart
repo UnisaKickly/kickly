@@ -30,8 +30,14 @@ import 'lega_repository.dart';
 class DatiLegaNonValidiException extends AppException {
   /// Crea l'errore per il campo indicato: [nome], [tipologiaMatch] o
   /// [privacy].
-  DatiLegaNonValidiException(this.campo)
-    : super(message: _messaggioPer(campo), code: 'dati_lega_non_validi');
+  ///
+  /// [messaggio] sostituisce il messaggio predefinito del campo quando lo
+  /// stesso campo puo' essere sbagliato in piu' modi (es. nome troppo lungo).
+  DatiLegaNonValidiException(this.campo, {String? messaggio})
+    : super(
+        message: messaggio ?? _messaggioPer(campo),
+        code: 'dati_lega_non_validi',
+      );
 
   /// Nome del campo nome della lega.
   static const nome = 'nome';
@@ -102,6 +108,13 @@ class GestioneLegaControl {
   ///
   /// Il RAD non dice la durata: 7 giorni dalla creazione (D29).
   static const durataCodiceInvito = Duration(days: 7);
+
+  /// Lunghezza massima del nome della lega, in caratteri.
+  ///
+  /// Il limite e' nel mock-up UI_LEG_2 ("Massimo 30 caratteri"), che fa parte
+  /// del RAD (§3.4.6); richiesto dai PM nel commento 11246 di KCK-249. Vale in
+  /// creazione e in modifica; FormLega lo usa anche come `maxLength`.
+  static const lunghezzaMassimaNome = 30;
 
   /// Lunghezza del codice d'invito (D29).
   static const lunghezzaCodiceInvito = 8;
@@ -274,6 +287,15 @@ class GestioneLegaControl {
   void _validaDati(String nome, String tipologiaMatch, String privacy) {
     if (nome.isEmpty) {
       throw DatiLegaNonValidiException(DatiLegaNonValidiException.nome);
+    }
+    // Si contano i caratteri (rune), non le unita' UTF-16: una lettera
+    // accentata o un'emoji valgono un carattere.
+    if (nome.runes.length > lunghezzaMassimaNome) {
+      throw DatiLegaNonValidiException(
+        DatiLegaNonValidiException.nome,
+        messaggio:
+            'Il nome puo\' avere al massimo $lunghezzaMassimaNome caratteri',
+      );
     }
     if (!TipologiaMatch.valori.contains(tipologiaMatch)) {
       throw DatiLegaNonValidiException(

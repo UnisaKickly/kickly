@@ -156,6 +156,27 @@ void main() {
       expect(find.byType(DashboardLega), findsNothing);
     });
 
+    // Preparazione: Giocatore che scrive un nome di 35 caratteri.
+    // Esito atteso (UI_LEG_2, limite dei PM): il campo accetta al massimo 30
+    // caratteri e mostra il limite sotto il campo.
+    testWidgets('il campo nome accetta al massimo 30 caratteri', (
+      tester,
+    ) async {
+      await apriSezioneLeghe(tester, control, '/leghe/nuova');
+
+      await tester.enterText(find.byKey(const Key('form_lega_nome')), 'B' * 35);
+      await tester.pump();
+
+      final TextField campo = tester.widget<TextField>(
+        find.byKey(const Key('form_lega_nome')),
+      );
+      expect(campo.controller!.text, 'B' * 30);
+      expect(
+        find.text('Massimo 30 caratteri, modificabile in seguito.'),
+        findsOneWidget,
+      );
+    });
+
     // Preparazione: il Control rifiuta la tipologia (caso non raggiungibile
     // dai pulsanti, ma la GUI deve mostrarlo).
     // Esito atteso (E1): messaggio sotto i formati, si resta sul modulo.
