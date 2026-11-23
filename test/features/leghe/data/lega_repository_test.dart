@@ -305,4 +305,113 @@ void main() {
     expect(result, isA<AppException>());
     expect((result as AppException).code, '23514');
   });
+
+  // KCK-226: con la RLS una DELETE non permessa tocca 0 righe senza errore;
+  // il repository deve segnalarla come errore di permesso (decisione dei PM).
+  group('Supabase rimuoviMembro con RLS', () {
+    /// Simula il database: [admin] dice se il giocatore e' amministratore,
+    /// [righeCancellate] e' la risposta di ogni DELETE per tabella.
+    Future<void> Function(HttpRequest) server(
+      List<String> chiamate,
+      List<String> prefer, {
+      required bool admin,
+      required Map<String, List<Object>> righeCancellate,
+    }) {
+      return (request) async {
+        final tabella = request.uri.pathSegments.last;
+        chiamate.add('${request.method} $tabella');
+        if (request.method == 'DELETE') {
+          prefer.add(request.headers.value('prefer') ?? '');
+          await _RestServer().respond(request, 200, righeCancellate[tabella]!);
+        } else if (request.uri.query.contains('giocatore_id=eq.')) {
+          // _isAdmin: filtra per giocatore.
+          await _RestServer().respond(request, 200, [
+            if (admin) {'giocatore_id': 'giocatore-1'},
+          ]);
+        } else {
+          // _adminCount: due amministratori, quindi la rimozione e' ammessa.
+          await _RestServer().respond(request, 200, [
+            {'giocatore_id': 'giocatore-1'},
+            {'giocatore_id': 'giocatore-2'},
+          ]);
+        }
+      };
+    }
+
+    test(
+      'una DELETE su membro_lega che tocca 0 righe lancia permission',
+      () async {
+        final chiamate = <String>[];
+        final result = await _withLegaSupabase<Object?>(
+          (repository) => repository
+              .rimuoviMembro('lega-1', 'giocatore-1')
+              .then<Object?>((_) => null, onError: (Object error) => error),
+          server(
+            chiamate,
+            <String>[],
+            admin: false,
+            righeCancellate: {'membro_lega': <Object>[]},
+          ),
+        );
+
+        expect(result, isA<AppException>());
+        expect((result as AppException).code, 'permission');
+        expect(chiamate.last, 'DELETE membro_lega');
+      },
+    );
+
+    test('una DELETE che rimuove la riga termina senza errori', () async {
+      final chiamate = <String>[];
+      final prefer = <String>[];
+      await _withLegaSupabase(
+        (repository) => repository.rimuoviMembro('lega-1', 'giocatore-1'),
+        server(
+          chiamate,
+          prefer,
+          admin: true,
+          righeCancellate: {
+            'amministratore_lega': [
+              {'giocatore_id': 'giocatore-1'},
+            ],
+            'membro_lega': [
+              {'giocatore_id': 'giocatore-1'},
+            ],
+          },
+        ),
+      );
+
+      expect(chiamate.where((c) => c.startsWith('DELETE')), [
+        'DELETE amministratore_lega',
+        'DELETE membro_lega',
+      ]);
+      expect(prefer, everyElement(contains('return=representation')));
+    });
+
+    test(
+      'se non si puo togliere l amministratore non si cancella il membro',
+      () async {
+        final chiamate = <String>[];
+        final result = await _withLegaSupabase<Object?>(
+          (repository) => repository
+              .rimuoviMembro('lega-1', 'giocatore-1')
+              .then<Object?>((_) => null, onError: (Object error) => error),
+          server(
+            chiamate,
+            <String>[],
+            admin: true,
+            righeCancellate: {
+              'amministratore_lega': <Object>[],
+              'membro_lega': [
+                {'giocatore_id': 'giocatore-1'},
+              ],
+            },
+          ),
+        );
+
+        expect(result, isA<AppException>());
+        expect((result as AppException).code, 'permission');
+        expect(chiamate, isNot(contains('DELETE membro_lega')));
+      },
+    );
+  });
 }
