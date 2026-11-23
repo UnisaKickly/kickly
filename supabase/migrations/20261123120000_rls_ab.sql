@@ -3,8 +3,13 @@
 -- stabilisce chi legge e chi scrive ogni riga in base all'utente autenticato
 -- (auth.uid()). Fonti: RAD v2.9 (§3.1.1 attori, RF_ACC, RF_LEG, RF_PAR, tabella
 -- degli oggetti), decisioni D1, D2, D3, D5, D6, D9, D11, D13, D17, D24, D26 e risposte dei PM
--- nel ticket KCK-226. Dove una scrittura non e' prevista dal client la si chiude
--- anche con REVOKE, cosi' una policy aggiunta per errore non basta ad aprirla.
+-- nel ticket KCK-226. Le scritture non previste dal client restano chiuse perche'
+-- non hanno una policy. In piu' si usa REVOKE in due casi, cosi' una policy
+-- aggiunta per errore non basta ad aprirle: dove l'UPDATE e' ammesso solo su
+-- alcune colonne (REVOKE UPDATE e GRANT per colonna su account, giocatore,
+-- prenotazione e partecipazione) e dove la scrittura spetta al server (UPDATE di
+-- gestore_campo; INSERT, UPDATE e DELETE di dispositivo_registrato; INSERT e
+-- DELETE di partecipazione).
 -- Restano chiuse di proposito: lettura di account e Player Card altrui, slot
 -- occupati di un campo e importi lato server (KCK-271), adesione con codice
 -- (KCK-256), registrazione dei dispositivi (KCK-195).
@@ -669,7 +674,7 @@ EXECUTE FUNCTION public.verifica_modifica_gol_assist();
 -- partita: passaggi di stato (statechart, D1, D5, D6, D26)
 -- ---------------------------------------------------------------------------
 -- L'unico passaggio di stato fatto dal client e' l'annullamento
--- dell'organizzatore, almeno 24 ore prima (D5). Gli altri passaggi li fa il
+-- dell'organizzatore, piu' di 24 ore prima (D5). Gli altri passaggi li fa il
 -- server con la service role (auth.uid() NULL). Si usa OLD.data_ora, cosi' il
 -- limite non si aggira spostando la data nello stesso UPDATE. UPDATE OF stato
 -- scatta anche quando la colonna e' nella SET con lo stesso valore, quindi si
@@ -691,13 +696,13 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    RAISE EXCEPTION 'Dal client e'' ammesso solo l''annullamento della partita da parte dell''organizzatore, almeno 24 ore prima'
+    RAISE EXCEPTION 'Dal client e'' ammesso solo l''annullamento della partita da parte dell''organizzatore, piu'' di 24 ore prima'
         USING ERRCODE = '42501';
 END;
 $$;
 
 COMMENT ON FUNCTION public.verifica_cambio_stato_partita() IS
-    'Statechart, D1, D5, D6, D26: per un utente autenticato ammette solo il passaggio ad Annullata da Aperta, Completa o Confermata, fatto dall''organizzatore almeno 24 ore prima di data_ora; il server (auth.uid() NULL) non ha limiti.';
+    'Statechart, D1, D5, D6, D26: per un utente autenticato ammette solo il passaggio ad Annullata da Aperta, Completa o Confermata, fatto dall''organizzatore piu'' di 24 ore prima di data_ora; il server (auth.uid() NULL) non ha limiti.';
 
 CREATE TRIGGER partita_cambio_stato_consentito
 BEFORE UPDATE OF stato ON public.partita

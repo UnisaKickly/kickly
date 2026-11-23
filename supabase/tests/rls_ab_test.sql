@@ -1,5 +1,5 @@
 -- Test pgTAP delle policy RLS degli schemi A e B (KCK-226), del controllo
--- sull'amministratore di crea_lega e dei trigger (D11, D2, stato della partita).
+-- sull'amministratore di crea_lega e dei trigger (D2, D11, stato della partita).
 -- Per ogni tabella: chi non e' autorizzato non legge e non scrive, chi e'
 -- autorizzato legge e scrive. Un UPDATE o DELETE filtrato dalla RLS non da'
 -- errore: l'effetto si verifica dopo RESET ROLE, come postgres, perche' da
@@ -11,7 +11,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(127);
+SELECT plan(134);
 
 -- ---------------------------------------------------------------------------
 -- Funzioni di appoggio del test (schema temporaneo, spariscono a fine sessione)
@@ -619,7 +619,12 @@ VALUES
      'confermato', NULL, 60.00, 6.00, 3.00, 57.00),
     ('20400000-0000-4000-8000-000000000402', '20400000-0000-4000-8000-000000000302',
      '20400000-0000-4000-8000-000000000201', '2026-12-10T18:00/2026-12-10T19:00',
-     'bloccato', '2026-12-09T18:00:00+00:00', 60.00, 6.00, 3.00, 57.00);
+     'bloccato', '2026-12-09T18:00:00+00:00', 60.00, 6.00, 3.00, 57.00),
+    -- PR4 su P3: G1 la organizza senza parteciparvi, per provare da solo il ramo
+    -- "organizzatore" della lettura.
+    ('20400000-0000-4000-8000-000000000404', '20400000-0000-4000-8000-000000000303',
+     '20400000-0000-4000-8000-000000000201', '2026-12-13T18:00/2026-12-13T19:00',
+     'bloccato', '2026-12-12T18:00:00+00:00', 60.00, 6.00, 3.00, 57.00);
 
 INSERT INTO public.partecipazione (id, giocatore_id, partita_id, risposta_stato, data_risposta)
 VALUES
@@ -630,7 +635,10 @@ VALUES
     ('20400000-0000-4000-8000-000000000503', '20400000-0000-4000-8000-000000000001',
      '20400000-0000-4000-8000-000000000302', 'confermata', '2026-11-16T10:00:00+00:00'),
     ('20400000-0000-4000-8000-000000000504', '20400000-0000-4000-8000-000000000001',
-     '20400000-0000-4000-8000-000000000304', 'confermata', '2026-11-16T11:00:00+00:00');
+     '20400000-0000-4000-8000-000000000304', 'confermata', '2026-11-16T11:00:00+00:00'),
+    -- 505: G2 su P3, partita privata senza lega che G1 organizza senza parteciparvi.
+    ('20400000-0000-4000-8000-000000000505', '20400000-0000-4000-8000-000000000002',
+     '20400000-0000-4000-8000-000000000303', 'confermata', '2026-11-17T10:00:00+00:00');
 
 -- ===========================================================================
 -- campo
@@ -821,6 +829,15 @@ SELECT is(
 );
 
 SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000404'),
+    1,
+    'prenotazione: l''organizzatore che non partecipa legge la prenotazione della propria partita'
+);
+SELECT lives_ok(
+    $$DELETE FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000401'$$,
+    'prenotazione: la DELETE dal client non solleva errori ma e'' filtrata'
+);
 SELECT throws_ok(
     $$INSERT INTO public.prenotazione (partita_id, campo_id, intervallo, stato_blocco, scadenza_blocco,
                                        costo_concordato, quota_individuale, commissione, netto_gestore)
@@ -887,6 +904,11 @@ SELECT is(
     'bloccato',
     'prenotazione: lo slot resta bloccato dopo i tentativi non autorizzati'
 );
+SELECT is(
+    (SELECT count(*)::integer FROM public.prenotazione WHERE id = '20400000-0000-4000-8000-000000000401'),
+    1,
+    'prenotazione: dopo la DELETE dal client la prenotazione esiste ancora'
+);
 
 -- ===========================================================================
 -- partecipazione
@@ -921,6 +943,11 @@ SELECT is(
 );
 
 SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SELECT is(
+    (SELECT count(*)::integer FROM public.partecipazione WHERE id = '20400000-0000-4000-8000-000000000505'),
+    1,
+    'partecipazione: l''organizzatore che non partecipa legge le partecipazioni della propria partita privata'
+);
 SELECT lives_ok(
     $$UPDATE public.partecipazione SET gol_partita = 2, assist_partita = 1 WHERE id = '20400000-0000-4000-8000-000000000502'$$,
     'partecipazione: l''organizzatore inserisce gol e assist a partita Conclusa (D2)'
@@ -1099,6 +1126,34 @@ SELECT is(
     (SELECT stato FROM public.partita WHERE id = '20400000-0000-4000-8000-000000000305'),
     'Completa',
     'partita: il cambio di stato della service role e'' salvato'
+);
+
+-- Annullamento da Completa e da Confermata: P6 e P7, private senza lega,
+-- organizzate da G1 a piu' di 24 ore (D5).
+INSERT INTO public.partita (id, giocatore_id, data_ora, tipologia, privacy, num_partecipanti_richiesti, stato)
+VALUES
+    ('20400000-0000-4000-8000-000000000306', '20400000-0000-4000-8000-000000000001',
+     now() + interval '5 days', '5v5', 'privata', 10, 'Completa'),
+    ('20400000-0000-4000-8000-000000000307', '20400000-0000-4000-8000-000000000001',
+     now() + interval '6 days', '5v5', 'privata', 10, 'Confermata');
+
+SELECT pg_temp.imposta_jwt('20400000-0000-4000-8000-000000000001', 'authenticated');
+SET LOCAL ROLE authenticated;
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000306'$$,
+    'partita: l''organizzatore annulla una partita Completa a piu'' di 24 ore'
+);
+SELECT lives_ok(
+    $$UPDATE public.partita SET stato = 'Annullata' WHERE id = '20400000-0000-4000-8000-000000000307'$$,
+    'partita: l''organizzatore annulla una partita Confermata a piu'' di 24 ore'
+);
+
+RESET ROLE;
+SELECT is(
+    (SELECT array_agg(stato ORDER BY id) FROM public.partita
+     WHERE id IN ('20400000-0000-4000-8000-000000000306', '20400000-0000-4000-8000-000000000307')),
+    ARRAY['Annullata', 'Annullata'],
+    'partita: le partite Completa e Confermata risultano Annullata'
 );
 
 RESET ROLE;
