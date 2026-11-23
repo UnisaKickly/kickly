@@ -9,9 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../../../core/theme/tema_kickly.dart';
 import '../domain/account.dart';
 import '../domain/registrazione_control.dart';
-import 'stile_mockup.dart';
 
 /// Passo UI_4 che completa la Player Card iniziale del Giocatore.
 class FormPlayerCard extends StatefulWidget {
@@ -159,7 +159,7 @@ class _FormPlayerCardState extends State<FormPlayerCard> {
   /// Applica lo stile del RAD alla configurazione della Player Card.
   Widget build(BuildContext context) {
     return Theme(
-      data: temaMockup(),
+      data: TemaKickly.crea(),
       child: Builder(builder: _costruisci),
     );
   }

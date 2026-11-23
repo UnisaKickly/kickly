@@ -164,4 +164,33 @@ void main() {
     expect(result, isA<AppException>());
     expect((result as AppException).code, '23514');
   });
+
+  // KCK-226: il GRANT per colonna ammette dal client solo UPDATE di stato.
+  test('Supabase updatePartita aggiorna solo la colonna stato', () async {
+    var method = '';
+    var path = '';
+    var query = '';
+    Object? body;
+    await _withSupabase(
+      (repository) => repository.updatePartita(
+        partita(id: 'p1', stato: StatoPartita.annullata),
+      ),
+      (request) async {
+        method = request.method;
+        path = request.uri.path;
+        query = request.uri.query;
+        body = jsonDecode(await utf8.decoder.bind(request).join());
+        await _RestServer().respond(
+          request,
+          200,
+          partita(id: 'p1', stato: StatoPartita.annullata).toJson(),
+        );
+      },
+    );
+
+    expect(method, 'PATCH');
+    expect(path, '/rest/v1/partita');
+    expect(query, contains('id=eq.p1'));
+    expect(body, {'stato': StatoPartita.annullata});
+  });
 }

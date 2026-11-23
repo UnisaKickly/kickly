@@ -1,13 +1,16 @@
 // Widget radice dell'app Kickly (KCK-194).
 //
 // Collega tema e routing condivisi. Contiene anche le schermate segnaposto
-// delle rotte ancora senza Boundary vera (UI_1, Dashboard): servono solo a far funzionare la
+// delle rotte ancora senza Boundary vera (UI_1, UI_2, Dashboard,
+// DashboardLega): servono solo a far funzionare la
 // navigazione e vanno eliminate da qui quando i ticket dei casi d'uso creano le
 // Boundary vere in lib/features/<sottosistema>/presentation/, altrimenti ci
 // sarebbero due classi con lo stesso nome.
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'core/router/app_router.dart';
+import 'features/leghe/domain/lega.dart';
 import 'features/utenza/domain/registrazione_control.dart';
 
 // Le Boundary vere restano esportate da app.dart per il router e i test shell.
@@ -110,6 +113,55 @@ class Dashboard extends StatelessWidget {
   @override
   /// Mostra il placeholder visibile dopo l'autenticazione.
   Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: Text('Dashboard')));
+    // Il pulsante "Leghe" sostituisce per ora la bottom navigation di
+    // UI_LEG_1 (app shell), cosi' la sezione Leghe e' raggiungibile
+    // (KCK-249).
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Dashboard'),
+            TextButton(
+              onPressed: () => context.go('/leghe'),
+              child: const Text('Leghe'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Rappresenta provvisoriamente la dashboard di una lega (UI_LEG_3).
+///
+/// Segnaposto (sostituito da KCK-216, RF_LEG_4): da eliminare quando esiste
+/// la Boundary vera. Mostra solo nome e codice d'invito della lega appena
+/// creata o modificata (UC_LEG_1 passo 4), ricevuta da FormLega.
+class DashboardLega extends StatelessWidget {
+  /// Crea il segnaposto per la lega [idLega]; [lega] e' null se la rotta e'
+  /// aperta senza i dati (es. link diretto).
+  const DashboardLega({super.key, required this.idLega, this.lega});
+
+  /// Id della lega dalla rotta `/leghe/:id`.
+  final String idLega;
+
+  /// Lega ricevuta dalla schermata precedente, se c'e'.
+  final Lega? lega;
+
+  @override
+  /// Mostra nome e codice d'invito, con il ritorno alla sezione Leghe.
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Indietro',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/leghe'),
+        ),
+        title: Text(lega?.nome ?? 'Lega'),
+      ),
+      body: Center(child: Text('Codice invito: ${lega?.codiceInvito ?? '-'}')),
+    );
   }
 }

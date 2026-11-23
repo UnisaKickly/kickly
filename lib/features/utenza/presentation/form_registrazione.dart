@@ -8,9 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../../../core/theme/tema_kickly.dart';
 import '../domain/registrazione_control.dart';
 import '../domain/validatore_password.dart';
-import 'stile_mockup.dart';
 
 /// Modulo UI_2 per i dati anagrafici, email e password del nuovo Giocatore.
 class FormRegistrazione extends StatefulWidget {
@@ -128,7 +128,7 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
   /// Applica lo stile scuro del RAD e costruisce il passo 1/3 di UI_2.
   Widget build(BuildContext context) {
     return Theme(
-      data: temaMockup(),
+      data: TemaKickly.crea(),
       child: Builder(builder: _costruisci),
     );
   }

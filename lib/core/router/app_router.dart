@@ -9,6 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app.dart';
+import '../../features/leghe/domain/lega.dart';
+import '../../features/leghe/presentation/form_lega.dart';
+import '../../features/leghe/presentation/vista_leghe.dart';
 import '../../features/utenza/domain/registrazione_control.dart';
 import '../../features/utenza/presentation/form_onboarding.dart';
 import '../../features/utenza/presentation/form_player_card.dart';
@@ -59,9 +62,12 @@ class AppRouter {
          redirect: (BuildContext context, GoRouterState state) {
            // Le impostazioni dell'account (logout, KCK-215) sono solo per chi
            // e' autenticato, come la dashboard.
+           // Anche la sezione Leghe (KCK-249) richiede un Giocatore
+           // autenticato (entry condition di UC_LEG_1).
            final bool nellaZonaAutenticata =
                state.matchedLocation == '/dashboard' ||
-               state.matchedLocation == '/impostazioni-account';
+               state.matchedLocation == '/impostazioni-account' ||
+               state.matchedLocation.startsWith('/leghe');
            // Schermata iniziale e login non servono a chi e' gia' autenticato:
            // dopo il login (RF_ACC_3, UI_7 -> Dashboard) si va alla dashboard.
            // La registrazione e' esclusa perche' dopo di essa l'onboarding di
@@ -87,7 +93,6 @@ class AppRouter {
                registrazioneControl,
              );
            }
-
            if (sessioneProvider.autenticato && nellIngressoPubblico) {
              return '/dashboard';
            }
@@ -146,6 +151,39 @@ class AppRouter {
              path: '/dashboard',
              builder: (BuildContext context, GoRouterState state) =>
                  const Dashboard(),
+           ),
+           // Sezione Leghe (KCK-249, NP_GIO_2): VistaLeghe -> FormLega ->
+           // DashboardLega. `/leghe/nuova` sta prima di `/leghe/:id`, cosi'
+           // "nuova" non e' letto come id di una lega.
+           GoRoute(
+             path: '/leghe',
+             builder: (BuildContext context, GoRouterState state) =>
+                 const VistaLeghe(),
+           ),
+           GoRoute(
+             path: '/leghe/nuova',
+             builder: (BuildContext context, GoRouterState state) =>
+                 const FormLega(),
+           ),
+           GoRoute(
+             path: '/leghe/:id',
+             builder: (BuildContext context, GoRouterState state) =>
+                 DashboardLega(
+                   idLega: state.pathParameters['id']!,
+                   lega: state.extra is Lega ? state.extra! as Lega : null,
+                 ),
+           ),
+           // Modifica: la apre la DashboardLega (KCK-216) solo agli
+           // amministratori (D13), passando la lega in `extra`. Senza la lega
+           // non si puo' precompilare il modulo: si torna alla dashboard.
+           GoRoute(
+             path: '/leghe/:id/modifica',
+             redirect: (BuildContext context, GoRouterState state) =>
+                 state.extra is Lega
+                 ? null
+                 : '/leghe/${state.pathParameters['id']}',
+             builder: (BuildContext context, GoRouterState state) =>
+                 FormLega(lega: state.extra! as Lega),
            ),
          ],
        );

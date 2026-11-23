@@ -9,9 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../../../core/theme/tema_kickly.dart';
 import '../domain/account.dart';
 import '../domain/registrazione_control.dart';
-import 'stile_mockup.dart';
 
 /// Passo UI_3 della procedura di registrazione e onboarding.
 class FormOnboarding extends StatefulWidget {
@@ -174,7 +174,7 @@ class _FormOnboardingState extends State<FormOnboarding> {
   /// Applica lo stile dei mock-up e costruisce il passo 2/3.
   Widget build(BuildContext context) {
     return Theme(
-      data: temaMockup(),
+      data: TemaKickly.crea(),
       child: Builder(builder: _costruisci),
     );
   }
