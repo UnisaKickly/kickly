@@ -73,6 +73,15 @@ SELECT
     now(), now()
 FROM generate_series(201, 211) AS giocatore_num;
 
+-- Il trigger giocatore_ruolo_coerente (D11, KCK-226) rifiuta una riga di
+-- giocatore se l'account non ha gia' ruolo_account = 'Giocatore': il trigger
+-- sulla registrazione crea l'account con il ruolo vuoto. Si imposta quindi il
+-- ruolo prima, come fa l'app con salvaRuolo (la modifica e' ammessa perche'
+-- l'onboarding e' in_corso e non esiste ancora la specializzazione).
+UPDATE public.account
+SET ruolo_account = 'Giocatore'
+WHERE email LIKE 'rsvp-kck219-%@example.invalid';
+
 INSERT INTO public.giocatore (account_id)
 SELECT id FROM auth.users
 WHERE email LIKE 'rsvp-kck219-%@example.invalid';
