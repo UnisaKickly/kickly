@@ -2,9 +2,54 @@
 // copertura della prima parte di F8 con TF_LEG_09, TF_LEG_10 e TF_LEG_11.
 // Le preparazioni e gli esiti attesi derivano dai frame e da UC_LEG_1.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kickly/core/errors/app_exception.dart';
 import 'package:kickly/features/leghe/data/in_memory_lega_repository.dart';
 import 'package:kickly/features/leghe/domain/gestione_lega_control.dart';
 import 'package:kickly/features/leghe/domain/lega.dart';
+
+/// Repository che simula una collisione solo al primo aggiornamento del codice.
+///
+/// I tentativi successivi vengono salvati nel repository in memoria senza
+/// effettuare chiamate a Supabase.
+class _RepositoryCollisioneInvitoUnaVolta extends InMemoryLegaRepository {
+  /// Codici ricevuti dalla rigenerazione di [GestioneLegaControl].
+  final List<String?> codiciProvati = [];
+
+  /// Indica se gli aggiornamenti successivi devono simulare la collisione.
+  bool collisioniAttive = false;
+
+  @override
+  Future<Lega> updateLega(Lega lega) async {
+    if (!collisioniAttive) {
+      return super.updateLega(lega);
+    }
+    codiciProvati.add(lega.codiceInvito);
+    if (codiciProvati.length == 1) {
+      throw AppException.database(
+        message: 'Esiste gia\' un elemento con questi dati.',
+        code: '23505',
+      );
+    }
+    return super.updateLega(lega);
+  }
+}
+
+/// Repository che simula una collisione a ogni aggiornamento del codice.
+///
+/// Permette di verificare il limite massimo di retry previsto da D29.
+class _RepositoryCollisioneInvitoSempre extends InMemoryLegaRepository {
+  /// Numero di tentativi ricevuti dal Control.
+  int tentativi = 0;
+
+  @override
+  Future<Lega> updateLega(Lega lega) async {
+    tentativi++;
+    throw AppException.database(
+      message: 'Esiste gia\' un elemento con questi dati.',
+      code: '23505',
+    );
+  }
+}
 
 void main() {
   const idAmministratore = '00000000-0000-4000-8000-000000000201';
@@ -126,6 +171,79 @@ void main() {
         salvata?.scadenzaCodiceInvito,
         adesso.add(GestioneLegaControl.durataCodiceInvito),
       );
+    });
+
+    /// Verifica il retry D29 dopo una collisione 23505 al primo
+    /// aggiornamento del codice scaduto.
+    test(
+      'd29_collisione23505_rigeneraSecondoCodiceECompletaAggiornamento',
+      () async {
+        final repositoryCollisione = _RepositoryCollisioneInvitoUnaVolta();
+        final controlCollisione = GestioneLegaControl(
+          legaRepository: repositoryCollisione,
+          orologio: () => adesso,
+        );
+        final legaScaduta = await repositoryCollisione.createLega(
+          Lega(
+            id: '',
+            nome: 'Lega Collisione Singola',
+            tipologiaMatch: TipologiaMatch.cinqueVsCinque,
+            privacy: PrivacyLega.privata,
+            codiceInvito: 'OLD12345',
+            scadenzaCodiceInvito: adesso.subtract(const Duration(seconds: 1)),
+          ),
+          idAmministratore,
+        );
+        repositoryCollisione.collisioniAttive = true;
+
+        final nuovoCodice = await controlCollisione.generaCodiceInvito(
+          idLega: legaScaduta.id,
+          idGiocatore: idAmministratore,
+        );
+
+        expect(repositoryCollisione.codiciProvati, hasLength(2));
+        expect(
+          repositoryCollisione.codiciProvati.first,
+          isNot(repositoryCollisione.codiciProvati.last),
+        );
+        expect(nuovoCodice, repositoryCollisione.codiciProvati.last);
+        expect(nuovoCodice, matches(RegExp(r'^[A-HJ-NP-Z2-9]{8}$')));
+        final salvata = await repositoryCollisione.findById(legaScaduta.id);
+        expect(salvata?.codiceInvito, nuovoCodice);
+      },
+    );
+
+    /// Verifica D29 quando tutti i tentativi falliscono per collisione 23505.
+    test('d29_collisione23505Sempre_rifiutaDopoTentativiMassimi', () async {
+      final repositoryCollisione = _RepositoryCollisioneInvitoSempre();
+      final controlCollisione = GestioneLegaControl(
+        legaRepository: repositoryCollisione,
+        orologio: () => adesso,
+      );
+      final legaScaduta = await repositoryCollisione.createLega(
+        Lega(
+          id: '',
+          nome: 'Lega Collisione Sempre',
+          tipologiaMatch: TipologiaMatch.cinqueVsCinque,
+          privacy: PrivacyLega.privata,
+          codiceInvito: 'OLD23456',
+          scadenzaCodiceInvito: adesso.subtract(const Duration(seconds: 1)),
+        ),
+        idAmministratore,
+      );
+
+      await expectLater(
+        controlCollisione.generaCodiceInvito(
+          idLega: legaScaduta.id,
+          idGiocatore: idAmministratore,
+        ),
+        throwsA(
+          isA<AppException>().having((error) => error.code, 'codice', '23505'),
+        ),
+      );
+      expect(repositoryCollisione.tentativi, 5);
+      final salvata = await repositoryCollisione.findById(legaScaduta.id);
+      expect(salvata?.codiceInvito, 'OLD23456');
     });
   });
 }

@@ -280,7 +280,10 @@ class GestioneLegaControl {
   ///
   /// Solo l'amministratore puo' gestire la condivisione. Il metodo recupera
   /// la lega, riusa un codice non scaduto e ne crea uno nuovo tramite il
-  /// generatore univoco quando il codice manca o e' scaduto.
+  /// generatore univoco quando il codice manca o e' scaduto. Se il database
+  /// rifiuta il nuovo codice per collisione con un invito gia' usato (23505),
+  /// riprova fino al limite previsto da D29 con un altro codice generato;
+  /// al superamento del limite restituisce l'errore del repository.
   Future<String> generaCodiceInvito({
     required String idLega,
     required String idGiocatore,
@@ -305,17 +308,31 @@ class GestioneLegaControl {
       return codiceEsistente;
     }
 
-    final String nuovoCodice = await _generaCodiceInvito();
-    final Lega legaAggiornata = Lega(
-      id: lega.id,
-      nome: lega.nome,
-      tipologiaMatch: lega.tipologiaMatch,
-      privacy: lega.privacy,
-      codiceInvito: nuovoCodice,
-      scadenzaCodiceInvito: _orologio().add(durataCodiceInvito),
+    for (var tentativo = 1; tentativo <= _tentativiCodice; tentativo++) {
+      final String nuovoCodice = await _generaCodiceInvito();
+      final Lega legaAggiornata = Lega(
+        id: lega.id,
+        nome: lega.nome,
+        tipologiaMatch: lega.tipologiaMatch,
+        privacy: lega.privacy,
+        codiceInvito: nuovoCodice,
+        scadenzaCodiceInvito: _orologio().add(durataCodiceInvito),
+      );
+      try {
+        await _legaRepository.updateLega(legaAggiornata);
+        return nuovoCodice;
+      } on AppException catch (error) {
+        if (error.code != _codiceDuplicato) {
+          rethrow;
+        }
+        if (tentativo >= _tentativiCodice) {
+          rethrow;
+        }
+      }
+    }
+    throw AppException.unexpected(
+      originalError: StateError('Nessun codice d\'invito libero trovato.'),
     );
-    await _legaRepository.updateLega(legaAggiornata);
-    return nuovoCodice;
   }
 
   /// Genera il link d'invito valido per una lega amministrata dal Giocatore.
