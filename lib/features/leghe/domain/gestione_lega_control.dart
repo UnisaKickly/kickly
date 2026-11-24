@@ -21,8 +21,15 @@
 import 'dart:math';
 
 import '../../../core/errors/app_exception.dart';
+import 'gestione_adesione_control.dart';
 import 'lega.dart';
 import 'lega_repository.dart';
+
+/// Indirizzo base condiviso dei link d'invito alle leghe.
+///
+/// Mantiene un unico punto di configurazione per il canale web degli inviti,
+/// cosi' i Control non dipendono da una configurazione duplicata.
+const indirizzoBaseInvito = 'https://unisakickly.github.io/kickly/';
 
 /// Dati del modulo di creazione non validi (UC_LEG_1 E1, "dati non validi").
 ///
@@ -86,6 +93,19 @@ class OperazioneNonPermessaException extends AppException {
     : super(
         message: 'Solo un amministratore puo\' modificare la lega',
         code: 'operazione_non_permessa',
+      );
+}
+
+/// Invito condiviso da chi non ha il ruolo di amministratore della lega.
+///
+/// Protegge il canale di condivisione su richieste dirette (TF_LEG_11):
+/// la GUI puo' nascondere il comando, ma il Control rifiuta ugualmente.
+class CondivisioneInvitoNonPermessaException extends AppException {
+  /// Crea l'errore con il messaggio leggibile per l'utente.
+  CondivisioneInvitoNonPermessaException()
+    : super(
+        message: 'Solo un amministratore puo\' condividere l\'invito',
+        code: 'condivisione_invito_non_permessa',
       );
 }
 
@@ -254,6 +274,81 @@ class GestioneLegaControl {
       }
       rethrow;
     }
+  }
+
+  /// Genera o restituisce il codice d'invito valido di una lega.
+  ///
+  /// Solo l'amministratore puo' gestire la condivisione. Il metodo recupera
+  /// la lega, riusa un codice non scaduto e ne crea uno nuovo tramite il
+  /// generatore univoco quando il codice manca o e' scaduto. Se il database
+  /// rifiuta il nuovo codice per collisione con un invito gia' usato (23505),
+  /// riprova fino al limite previsto da D29 con un altro codice generato;
+  /// al superamento del limite restituisce l'errore del repository.
+  Future<String> generaCodiceInvito({
+    required String idLega,
+    required String idGiocatore,
+  }) async {
+    if (!await _legaRepository.isAmministratore(idLega, idGiocatore)) {
+      throw CondivisioneInvitoNonPermessaException();
+    }
+
+    final Lega? lega = await _legaRepository.findById(idLega);
+    if (lega == null) {
+      throw LegaNonTrovataException();
+    }
+
+    final String? codiceEsistente = lega.codiceInvito;
+    final DateTime? scadenzaEsistente = lega.scadenzaCodiceInvito;
+    final bool codiceValido =
+        codiceEsistente != null &&
+        codiceEsistente.isNotEmpty &&
+        scadenzaEsistente != null &&
+        _orologio().isBefore(scadenzaEsistente);
+    if (codiceValido) {
+      return codiceEsistente;
+    }
+
+    for (var tentativo = 1; tentativo <= _tentativiCodice; tentativo++) {
+      final String nuovoCodice = await _generaCodiceInvito();
+      final Lega legaAggiornata = Lega(
+        id: lega.id,
+        nome: lega.nome,
+        tipologiaMatch: lega.tipologiaMatch,
+        privacy: lega.privacy,
+        codiceInvito: nuovoCodice,
+        scadenzaCodiceInvito: _orologio().add(durataCodiceInvito),
+      );
+      try {
+        await _legaRepository.updateLega(legaAggiornata);
+        return nuovoCodice;
+      } on AppException catch (error) {
+        if (error.code != _codiceDuplicato) {
+          rethrow;
+        }
+        if (tentativo >= _tentativiCodice) {
+          rethrow;
+        }
+      }
+    }
+    throw AppException.unexpected(
+      originalError: StateError('Nessun codice d\'invito libero trovato.'),
+    );
+  }
+
+  /// Genera il link d'invito valido per una lega amministrata dal Giocatore.
+  ///
+  /// Riutilizza [generaCodiceInvito] per preservare autorizzazione, scadenza
+  /// e rigenerazione del codice, e costruisce il nuovo canale web come link
+  /// senza modificare router o gestione dei membri.
+  Future<String> generaLinkInvito({
+    required String idLega,
+    required String idGiocatore,
+  }) async {
+    final String codice = await generaCodiceInvito(
+      idLega: idLega,
+      idGiocatore: idGiocatore,
+    );
+    return '$indirizzoBaseInvito#/lega/invito/$codice';
   }
 
   /// Restituisce le leghe di cui il Giocatore e' membro, ciascuna con il suo
