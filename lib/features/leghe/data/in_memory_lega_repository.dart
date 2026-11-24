@@ -1,17 +1,26 @@
 import 'package:kickly/core/errors/app_exception.dart';
 
+import '../domain/gestione_adesione_control.dart';
 import '../domain/lega.dart';
 import '../domain/lega_repository.dart';
 
 /// Implementazione in memoria di LegaRepository per test e sviluppo locale.
 class InMemoryLegaRepository implements LegaRepository {
-  /// Crea un repository vuoto con ID deterministici.
-  InMemoryLegaRepository();
+  /// Crea un repository vuoto con ID deterministici e orologio configurabile.
+  ///
+  /// [orologio] permette di verificare la scadenza degli inviti nei test; se
+  /// omesso usa l'orologio di sistema.
+  InMemoryLegaRepository({DateTime Function()? orologio})
+    : _orologio = orologio ?? DateTime.now;
 
   final Map<String, Lega> _leghe = {};
   final Map<String, Set<String>> _membri = {};
   final Map<String, Set<String>> _amministratori = {};
+  final DateTime Function() _orologio;
   int _nextId = 1;
+
+  /// Caratteri ammessi dal formato D29, senza lettere o cifre ambigue.
+  static const _caratteriCodiceInvito = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   /// Genera un UUID fittizio stabile senza dipendenze esterne.
   String _generateId() {
@@ -86,6 +95,41 @@ class InMemoryLegaRepository implements LegaRepository {
       }
     }
     return null;
+  }
+
+  /// Valida il codice e aggiunge il Giocatore alla lega in memoria.
+  ///
+  /// Mantiene la stessa normalizzazione, scadenza e protezione dai duplicati
+  /// della RPC, usando [giocatoreId] come identità locale del chiamante.
+  @override
+  Future<Lega> uniscitiConCodice(
+    String codiceInvito,
+    String giocatoreId,
+  ) async {
+    final codice = codiceInvito.trim().toUpperCase();
+    if (codice.length != 8 ||
+        codice.runes.any(
+          (int carattere) =>
+              !_caratteriCodiceInvito.contains(String.fromCharCode(carattere)),
+        )) {
+      throw CodiceInvitoNonValidoException();
+    }
+
+    final Lega? lega = await findByCodiceInvito(codice);
+    if (lega == null) {
+      throw CodiceInvitoNonValidoException();
+    }
+    final DateTime? scadenza = lega.scadenzaCodiceInvito;
+    if (scadenza == null || !_orologio().isBefore(scadenza)) {
+      throw CodiceInvitoScadutoException();
+    }
+
+    final membri = _membri[lega.id]!;
+    if (membri.contains(giocatoreId)) {
+      throw GiocatoreGiaMembroException();
+    }
+    membri.add(giocatoreId);
+    return lega;
   }
 
   @override

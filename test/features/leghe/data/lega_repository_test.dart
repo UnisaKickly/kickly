@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kickly/core/errors/app_exception.dart';
 import 'package:kickly/features/leghe/data/in_memory_lega_repository.dart';
 import 'package:kickly/features/leghe/data/supabase_lega_repository.dart';
+import 'package:kickly/features/leghe/domain/gestione_adesione_control.dart';
 import 'package:kickly/features/leghe/domain/lega.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -64,6 +65,20 @@ void main() {
     );
   }
 
+  Future<Object?> erroreAdesione(String codiceErrore) {
+    return _withLegaSupabase<Object?>(
+      (repository) => repository
+          .uniscitiConCodice('ABC23456', 'giocatore-1')
+          .then<Object?>((_) => null, onError: (Object error) => error),
+      (request) => _RestServer().respond(request, 400, {
+        'code': codiceErrore,
+        'message': 'errore invito di test',
+        'details': null,
+        'hint': null,
+      }),
+    );
+  }
+
   test(
     'crea una lega e associa il creatore come membro e amministratore',
     () async {
@@ -76,6 +91,70 @@ void main() {
       expect(await repository.findByGiocatore('giocatore-1'), [created]);
     },
   );
+
+  test('InMemory uniscitiConCodice normalizza e aggiunge il membro', () async {
+    final adesso = DateTime.utc(2026, 11, 24, 10);
+    final repository = InMemoryLegaRepository(orologio: () => adesso);
+    final created = await repository.createLega(
+      lega(
+        codiceInvito: 'ABC23456',
+        scadenzaCodiceInvito: adesso.add(const Duration(days: 7)),
+      ),
+      'giocatore-1',
+    );
+
+    final aderita = await repository.uniscitiConCodice(
+      ' abc23456 ',
+      'giocatore-2',
+    );
+
+    expect(aderita, same(created));
+    expect(await repository.findMembri(created.id), [
+      'giocatore-1',
+      'giocatore-2',
+    ]);
+  });
+
+  test('InMemory uniscitiConCodice rifiuta codice scaduto', () async {
+    final adesso = DateTime.utc(2026, 11, 24, 10);
+    final repository = InMemoryLegaRepository(orologio: () => adesso);
+    await repository.createLega(
+      lega(
+        codiceInvito: 'ABC23456',
+        scadenzaCodiceInvito: adesso.subtract(const Duration(seconds: 1)),
+      ),
+      'giocatore-1',
+    );
+
+    await expectLater(
+      repository.uniscitiConCodice('ABC23456', 'giocatore-2'),
+      throwsA(isA<CodiceInvitoScadutoException>()),
+    );
+    expect(await repository.findByGiocatore('giocatore-2'), isEmpty);
+  });
+
+  test('InMemory uniscitiConCodice rifiuta codice malformato', () async {
+    final repository = InMemoryLegaRepository();
+
+    await expectLater(
+      repository.uniscitiConCodice('AIO23456', 'giocatore-2'),
+      throwsA(isA<CodiceInvitoNonValidoException>()),
+    );
+  });
+
+  test('InMemory uniscitiConCodice rifiuta membri già presenti', () async {
+    final repository = InMemoryLegaRepository();
+    final created = await repository.createLega(
+      lega(codiceInvito: 'ABC23456'),
+      'giocatore-1',
+    );
+
+    await expectLater(
+      repository.uniscitiConCodice('ABC23456', 'giocatore-1'),
+      throwsA(isA<GiocatoreGiaMembroException>()),
+    );
+    expect(await repository.findMembri(created.id), ['giocatore-1']);
+  });
 
   test('persiste passivamente codice invito e scadenza', () async {
     final repository = InMemoryLegaRepository();
@@ -266,6 +345,72 @@ void main() {
     expect(path, '/rest/v1/rpc/crea_lega');
     expect(result.id, 'lega-rpc-id');
     expect(result.codiceInvito, 'INVITO-TEST');
+  });
+
+  test('Supabase uniscitiConCodice invoca RPC con il solo codice', () async {
+    final response = lega(id: 'lega-invitata').toJson();
+    var method = '';
+    var path = '';
+    var parameters = <String, dynamic>{};
+    final result = await _withLegaSupabase(
+      (repository) => repository.uniscitiConCodice('ABC23456', 'giocatore-1'),
+      (request) async {
+        method = request.method;
+        path = request.uri.path;
+        final body = await utf8.decoder.bind(request).join();
+        parameters = Map<String, dynamic>.from(jsonDecode(body) as Map);
+        await _RestServer().respond(request, 200, response);
+      },
+    );
+
+    expect(method, 'POST');
+    expect(path, '/rest/v1/rpc/unisciti_lega_con_codice');
+    expect(parameters, {'p_codice_invito': 'ABC23456'});
+    expect(result.id, 'lega-invitata');
+  });
+
+  test('Supabase uniscitiConCodice traduce KCK01', () async {
+    final error = await erroreAdesione('KCK01');
+
+    expect(error, isA<CodiceInvitoNonValidoException>());
+  });
+
+  test('Supabase uniscitiConCodice traduce KCK02', () async {
+    final error = await erroreAdesione('KCK02');
+
+    expect(error, isA<CodiceInvitoScadutoException>());
+  });
+
+  test('Supabase uniscitiConCodice traduce KCK03', () async {
+    final error = await erroreAdesione('KCK03');
+
+    expect(error, isA<GiocatoreGiaMembroException>());
+  });
+
+  test('Supabase uniscitiConCodice traduce 28000 in errore permesso', () async {
+    final error = await erroreAdesione('28000');
+
+    expect(
+      error,
+      isA<AppException>().having(
+        (exception) => exception.code,
+        'code',
+        'permission',
+      ),
+    );
+  });
+
+  test('Supabase inoltra gli altri errori al traduttore condiviso', () async {
+    final error = await erroreAdesione('23505');
+
+    expect(
+      error,
+      isA<AppException>().having(
+        (exception) => exception.code,
+        'code',
+        '23505',
+      ),
+    );
   });
 
   test('Supabase existsByNome filtra con ilike e normalizza in Dart', () async {

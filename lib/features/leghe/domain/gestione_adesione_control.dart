@@ -74,32 +74,35 @@ class LegaNonTrovataException extends AppException {
 /// RF_LEG_2; per ora espone esclusivamente gli errori applicativi dell'adesione.
 class GestioneAdesioneControl {
   /// Crea il Control con il repository delle leghe.
-  ///
-  /// [orologio] rende verificabile nei test la scadenza degli inviti; in
-  /// produzione usa l'orologio di sistema.
-  GestioneAdesioneControl({
-    required this._legaRepository,
-    DateTime Function()? orologio,
-  }) : _orologio = orologio ?? DateTime.now;
+  // Il parametro pubblico mantiene privato il nome del campo interno.
+  GestioneAdesioneControl({required LegaRepository legaRepository})
+    // ignore: prefer_initializing_formals
+    : _legaRepository = legaRepository;
 
   final LegaRepository _legaRepository;
-  final DateTime Function() _orologio;
 
   /// Caratteri ammessi nel codice, uguali a quelli usati dalla generazione.
   static const _caratteriCodice = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
   /// Unisce il Giocatore a una lega tramite un codice d'invito valido.
   ///
-  /// Verifica esistenza e scadenza dell'invito prima di controllare se il
-  /// Giocatore appartiene gia' alla lega, evitando duplicati nell'associazione
-  /// molti-a-molti.
+  /// Valida la forma del codice; il repository verifica esistenza, scadenza e
+  /// appartenenza e registra l'adesione in un'unica operazione.
   Future<Lega> uniscitiConCodice({
     required String codiceInvito,
     required String idGiocatore,
   }) async {
-    final Lega lega = await _validaInvito(codiceInvito);
-    await _verificaNonMembro(lega.id, idGiocatore);
-    return _aggiungiMembroLega(lega, idGiocatore);
+    final String codiceNormalizzato = codiceInvito.trim().toUpperCase();
+    if (codiceNormalizzato.length !=
+            GestioneLegaControl.lunghezzaCodiceInvito ||
+        codiceNormalizzato.runes.any(
+          (int carattere) =>
+              !_caratteriCodice.contains(String.fromCharCode(carattere)),
+        )) {
+      throw CodiceInvitoNonValidoException();
+    }
+
+    return _legaRepository.uniscitiConCodice(codiceNormalizzato, idGiocatore);
   }
 
   /// Unisce il Giocatore a una lega aperta dal link d'invito canonico.
@@ -156,35 +159,6 @@ class GestioneAdesioneControl {
       throw LinkInvitoNonValidoException();
     }
     return codice;
-  }
-
-  /// Verifica esistenza e scadenza di un invito prima dell'adesione.
-  ///
-  /// Centralizza l'E2 di UC_LEG_1 cosi' entrambe le modalita' con invito
-  /// applicano gli stessi messaggi e gli stessi controlli temporali.
-  Future<Lega> _validaInvito(String codiceInvito) async {
-    final String codice = codiceInvito.trim().toUpperCase();
-    if (codice.isEmpty ||
-        codice.length != GestioneLegaControl.lunghezzaCodiceInvito) {
-      throw CodiceInvitoNonValidoException();
-    }
-    if (codice.runes.any(
-      (int carattere) =>
-          !_caratteriCodice.contains(String.fromCharCode(carattere)),
-    )) {
-      throw CodiceInvitoNonValidoException();
-    }
-
-    final Lega? lega = await _legaRepository.findByCodiceInvito(codice);
-    if (lega == null) {
-      throw CodiceInvitoNonValidoException();
-    }
-
-    final DateTime? scadenza = lega.scadenzaCodiceInvito;
-    if (scadenza == null || !_orologio().isBefore(scadenza)) {
-      throw CodiceInvitoScadutoException();
-    }
-    return lega;
   }
 
   /// Verifica che il Giocatore non sia gia' membro della lega.
