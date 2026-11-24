@@ -68,10 +68,23 @@ class _KicklyAppState extends State<KicklyApp> {
   }
 }
 
-/// Mostra l'ingresso pubblico dell'app prima dell'autenticazione.
+/// Mostra l'ingresso pubblico dell'app prima dell'autenticazione (UI_1).
+///
+/// Oltre al messaggio di benvenuto offre i due punti d'ingresso del mock-up:
+/// "Registrati" porta alla registrazione (UC_ACC_1) e "Accedi" al login
+/// (RF_ACC_3). Senza questi pulsanti, su un telefono non c'e' modo di
+/// raggiungere le due schermate (non c'e' una barra dell'indirizzo): KCK-277.
 class SchermataIniziale extends StatelessWidget {
   /// Crea la schermata iniziale.
   const SchermataIniziale({super.key});
+
+  /// Chiave del pulsante che apre la registrazione (usata dai test).
+  static const chiaveRegistrati = ValueKey<String>(
+    'schermata_iniziale_registrati',
+  );
+
+  /// Chiave del pulsante che apre il login (usata dai test).
+  static const chiaveAccedi = ValueKey<String>('schermata_iniziale_accedi');
 
   @override
   /// Costruisce il contenuto pubblico mostrato prima dell'autenticazione.
@@ -79,20 +92,53 @@ class SchermataIniziale extends StatelessWidget {
     final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: Center(
+      body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.sports_soccer, size: 72),
-              const SizedBox(height: 16),
-              Text('Ciao da Kickly!', style: textTheme.headlineMedium),
-              const SizedBox(height: 8),
-              Text(
-                'Organizza, gioca, vota, cresci.',
-                style: textTheme.bodyLarge,
-                textAlign: TextAlign.center,
+              // Il messaggio di benvenuto occupa lo spazio libero e resta al
+              // centro; i pulsanti stanno in basso, a portata di pollice.
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.sports_soccer, size: 72),
+                      const SizedBox(height: 16),
+                      Text('Ciao da Kickly!', style: textTheme.headlineMedium),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Organizza, gioca, vota, cresci.',
+                        style: textTheme.bodyLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // `push` e non `go`: cosi' la freccia "indietro" delle due
+              // schermate riporta qui.
+              FilledButton(
+                key: chiaveRegistrati,
+                onPressed: () => context.push('/registrazione'),
+                child: const Text('Registrati'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                key: chiaveAccedi,
+                onPressed: () => context.push('/login'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  shape: const StadiumBorder(),
+                  foregroundColor: ColoriKickly.testo,
+                  side: const BorderSide(color: ColoriKickly.bordo),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: const Text('Accedi'),
               ),
             ],
           ),

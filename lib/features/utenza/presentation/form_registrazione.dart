@@ -33,6 +33,9 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _eta = TextEditingController();
 
+  /// Chiave del contenitore dell'errore: serve a farlo scorrere in vista.
+  final GlobalKey _chiaveErrore = GlobalKey();
+
   bool _caricamento = false;
   String? _errore;
   String? _accountId;
@@ -118,10 +121,24 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
   }
 
   /// Mostra il messaggio leggibile prodotto dal Control.
+  ///
+  /// Dopo il ridisegno fa scorrere la vista fino al messaggio: su un telefono
+  /// il modulo e' piu' alto dello schermo e l'errore, sotto i campi, altrimenti
+  /// resterebbe fuori vista.
   void _mostraErrore(String messaggio) {
-    if (mounted) {
-      setState(() => _errore = messaggio);
+    if (!mounted) {
+      return;
     }
+    setState(() => _errore = messaggio);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final BuildContext? contesto = _chiaveErrore.currentContext;
+      if (contesto != null && contesto.mounted) {
+        Scrollable.ensureVisible(
+          contesto,
+          duration: const Duration(milliseconds: 200),
+        );
+      }
+    });
   }
 
   @override
@@ -205,7 +222,7 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
                           const Padding(
                             padding: EdgeInsets.only(top: 6),
                             child: Text(
-                              'Almeno 8 caratteri, una maiuscola e un numero.',
+                              'Almeno 8 caratteri, una lettera e un numero.',
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -227,6 +244,20 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
                       ),
                     ),
                   ),
+                  // L'errore sta nel contenuto scorrevole, sotto il modulo, e non
+                  // nella barra fissa in basso: cosi' la barra ha sempre la
+                  // stessa altezza e il testo non viene tagliato a meta' dal
+                  // messaggio (KCK-277). `_mostraErrore` lo porta in vista.
+                  if (_errore != null) ...[
+                    const SizedBox(height: 14),
+                    KeyedSubtree(
+                      key: _chiaveErrore,
+                      child: _MessaggioErrore(
+                        chiave: const Key('form_registrazione_errore'),
+                        messaggio: _errore!,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   Text(
                     "Creando l'account accetti i Termini di servizio e "
@@ -240,11 +271,6 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(
                 children: [
-                  if (_errore != null)
-                    _MessaggioErrore(
-                      chiave: const Key('form_registrazione_errore'),
-                      messaggio: _errore!,
-                    ),
                   FilledButton(
                     key: const Key('form_registrazione_continua'),
                     onPressed: _caricamento ? null : _continua,
