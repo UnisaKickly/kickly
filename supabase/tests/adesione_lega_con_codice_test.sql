@@ -255,6 +255,11 @@ SELECT is(
     (
         SELECT count(*)::integer
         FROM public.membro_lega
+        WHERE lega_id IN (
+            '27400000-0000-4000-8000-000000000101',
+            '27400000-0000-4000-8000-000000000102',
+            '27400000-0000-4000-8000-000000000103'
+        )
     ),
     5,
     'una chiamata non autenticata non inserisce associazioni membro'
