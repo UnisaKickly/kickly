@@ -20,11 +20,17 @@ const BASE_STRIPE = "https://api.stripe.com/v1";
  * Errore di una chiamata a Stripe.
  *
  * `stato` e' lo status HTTP della risposta, oppure null se la chiamata non e'
- * arrivata a Stripe (rete interrotta, E2 di UC_PAG_1). Il messaggio e' generico
- * di proposito: il corpo della risposta di Stripe non viene propagato al client.
+ * arrivata a Stripe (rete interrotta, E2 di UC_PAG_1). `codice` e' SOLO
+ * `error.code` della risposta di Stripe (es. `resource_missing`), che serve a
+ * riconoscere una sessione che Stripe non trova (decisione dei PM su KCK-225):
+ * `error.message` e il resto del corpo non vengono mai conservati. Il messaggio e'
+ * generico di proposito: il corpo della risposta non arriva al client.
  */
 export class ErroreStripe extends Error {
-  constructor(readonly stato: number | null) {
+  constructor(
+    readonly stato: number | null,
+    readonly codice: string | null = null,
+  ) {
     super(
       stato === null
         ? "Stripe non raggiungibile"
@@ -86,9 +92,15 @@ async function chiamaStripe(
   }
 
   if (!risposta.ok) {
-    // Il corpo viene consumato per liberare la connessione, ma non propagato.
-    await risposta.body?.cancel();
-    throw new ErroreStripe(risposta.status);
+    // Del corpo si tiene solo error.code; se non e' JSON o manca resta null.
+    let codice: string | null = null;
+    try {
+      const json = await risposta.json() as { error?: { code?: unknown } };
+      if (typeof json?.error?.code === "string") codice = json.error.code;
+    } catch {
+      codice = null;
+    }
+    throw new ErroreStripe(risposta.status, codice);
   }
   try {
     return await risposta.json() as Record<string, unknown>;
@@ -167,8 +179,9 @@ export async function leggiSessioneCheckout(
  * Se il Gestore non ha ancora un account (`idAccountPagamenti` vuoto) lo crea con
  * POST /v1/accounts e lo fa salvare con `salvaIdAccount` SUBITO, prima di chiedere
  * il link: se poi il link fallisce l'account non resta orfano e al tentativo
- * successivo si riusa. La chiave di idempotenza `onboarding_<account_id>` evita
- * un secondo account se la stessa richiesta viene ripetuta.
+ * successivo si riusa. La chiave di idempotenza la calcola il chiamante
+ * (`onboarding_<account_id>_<finestra>`, vedi index.ts): evita un secondo account
+ * se la stessa richiesta viene ripetuta nella stessa finestra.
  *
  * Perche' i `controller` e non `type=express`: Stripe indica `type` come
  * parametro dei tipi di account legacy; i controller sono l'equivalente per le
@@ -185,10 +198,10 @@ export async function collegaAccountGestore(
   fetchStripe: Fetch,
   chiaveSegreta: string,
   dati: {
-    accountId: string;
     idAccountPagamenti: string | null;
     urlRitorno: string;
     urlAggiornamento: string;
+    chiaveIdempotenza: string;
     salvaIdAccount: (idAccountPagamenti: string) => Promise<void>;
   },
 ): Promise<{ idAccountPagamenti: string; url: string }> {
@@ -207,7 +220,7 @@ export async function collegaAccountGestore(
         "controller[requirement_collection]": "stripe",
         "capabilities[transfers][requested]": "true",
       },
-      `onboarding_${dati.accountId}`,
+      dati.chiaveIdempotenza,
     );
     if (typeof account.id !== "string") {
       throw new ErroreStripe(null);

@@ -44,7 +44,8 @@ interface RichiestaStripe {
 }
 
 /** Risposta forzata dello Stripe finto per un percorso: errore HTTP o rete interrotta. */
-type Guasto = { stato: number } | "rete";
+/** `codice` diventa error.code del corpo, come nelle risposte di errore di Stripe. */
+type Guasto = { stato: number; codice?: string } | "rete";
 
 /** Stato condiviso di Stripe finto e DB finto. */
 interface Ambiente {
@@ -143,7 +144,7 @@ function creaAmbiente(opzioni: {
       );
     }
     if (guasto) {
-      const errore = { error: { message: "guasto" } };
+      const errore = { error: { code: guasto.codice, message: "guasto" } };
       if (chiave) {
         risposteIdempotenti.set(chiave, { corpo: errore, stato: guasto.stato });
       }
@@ -162,7 +163,14 @@ function creaAmbiente(opzioni: {
     } else if (metodo === "GET" && percorso.startsWith("/checkout/sessions/")) {
       const id = percorso.split("/").pop()!;
       const sessione = ambiente.sessioni.get(id);
-      if (!sessione) return Promise.resolve(Response.json({}, { status: 404 }));
+      if (!sessione) {
+        // Come Stripe per un oggetto che non esiste.
+        return Promise.resolve(
+          Response.json({
+            error: { code: "resource_missing", message: "No such session" },
+          }, { status: 404 }),
+        );
+      }
       corpo = { id, ...sessione };
     } else if (metodo === "POST" && percorso === "/accounts") {
       contatore += 1;
@@ -374,6 +382,7 @@ Deno.test("errore_stripe_500_gestito_senza_transazione", async () => {
   const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 502);
+  assert.equal(json.codice, "servizio_pagamento_non_disponibile");
   assert.equal(typeof json.errore, "string");
   assert.ok(
     !JSON.stringify(json).includes("guasto"),
@@ -402,6 +411,7 @@ Deno.test("chiave_stripe_mancante_o_non_di_test_rifiutata_senza_chiamare_stripe"
     const { stato, json } = await chiama(ambiente, PAGA);
 
     assert.equal(stato, 500);
+    assert.equal(json.codice, "configurazione_non_valida");
     assert.equal(ambiente.richiesteStripe.length, 0);
     assert.ok(
       !JSON.stringify(json).includes("sk_"),
@@ -427,9 +437,10 @@ Deno.test("chiave_stripe_inviata_solo_a_stripe_e_mai_nella_risposta", async () =
 Deno.test("pagamento_rifiutato_se_utente_non_autenticato", async () => {
   const ambiente = creaAmbiente();
 
-  const { stato } = await chiama(ambiente, PAGA, null);
+  const { stato, json } = await chiama(ambiente, PAGA, null);
 
   assert.equal(stato, 401);
+  assert.equal(json.codice, "non_autenticato");
   assert.equal(ambiente.richiesteStripe.length, 0);
 });
 
@@ -439,9 +450,10 @@ Deno.test("pagamento_rifiutato_se_partita_non_completa", async () => {
   ) {
     const ambiente = creaAmbiente({ quota: { statoPartita } });
 
-    const { stato } = await chiama(ambiente, PAGA);
+    const { stato, json } = await chiama(ambiente, PAGA);
 
     assert.equal(stato, 409, statoPartita);
+    assert.equal(json.codice, "partita_non_completa", statoPartita);
     assert.equal(ambiente.richiesteStripe.length, 0);
   }
 });
@@ -453,9 +465,10 @@ Deno.test("pagamento_rifiutato_se_termine_versamento_scaduto", async () => {
   ) {
     const ambiente = creaAmbiente({ quota: { termineVersamento } });
 
-    const { stato } = await chiama(ambiente, PAGA);
+    const { stato, json } = await chiama(ambiente, PAGA);
 
     assert.equal(stato, 409, termineVersamento);
+    assert.equal(json.codice, "termine_scaduto", termineVersamento);
     assert.equal(ambiente.richiesteStripe.length, 0);
   }
 });
@@ -463,9 +476,10 @@ Deno.test("pagamento_rifiutato_se_termine_versamento_scaduto", async () => {
 Deno.test("pagamento_rifiutato_se_giocatore_non_iscritto_alla_partita", async () => {
   const ambiente = creaAmbiente({ quota: { rispostaStato: "ritirata" } });
 
-  const { stato } = await chiama(ambiente, PAGA);
+  const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 409);
+  assert.equal(json.codice, "non_iscritto");
   assert.equal(ambiente.richiesteStripe.length, 0);
 });
 
@@ -474,9 +488,16 @@ Deno.test("pagamento_rifiutato_se_quota_di_altro_giocatore_o_gia_versata", async
   const versata = creaAmbiente({ quota: { statoVersamento: "versata" } });
   const inesistente = creaAmbiente({ quota: null });
 
-  assert.equal((await chiama(altrui, PAGA)).stato, 404);
-  assert.equal((await chiama(inesistente, PAGA)).stato, 404);
-  assert.equal((await chiama(versata, PAGA)).stato, 409);
+  const rAltrui = await chiama(altrui, PAGA);
+  const rInesistente = await chiama(inesistente, PAGA);
+  const rVersata = await chiama(versata, PAGA);
+
+  assert.equal(rAltrui.stato, 404);
+  assert.equal(rAltrui.json.codice, "quota_non_trovata");
+  assert.equal(rInesistente.stato, 404);
+  assert.equal(rInesistente.json.codice, "quota_non_trovata");
+  assert.equal(rVersata.stato, 409);
+  assert.equal(rVersata.json.codice, "quota_gia_versata");
   for (const a of [altrui, versata, inesistente]) {
     assert.equal(a.richiesteStripe.length, 0);
   }
@@ -542,6 +563,7 @@ Deno.test("pagamento_completata_risponde_in_verifica_senza_chiamare_stripe", asy
   const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 409);
+  assert.equal(json.codice, "pagamento_in_verifica");
   assert.equal(json.errore, "pagamento in verifica");
   assert.equal(ambiente.richiesteStripe.length, 0);
   assert.equal(ambiente.transazioni.length, 1);
@@ -560,6 +582,48 @@ Deno.test("errore_stripe_sulla_lettura_della_sessione_esistente_gestito", async 
   assert.deepEqual(ambiente.transazioni, prima);
 });
 
+Deno.test("sessione_non_trovata_resource_missing_segna_fallita_e_crea_nuova_sessione", async () => {
+  const ambiente = creaAmbiente();
+  await chiama(ambiente, PAGA);
+  // Stripe non conosce piu' la sessione: GET risponde 404 resource_missing.
+  ambiente.sessioni.delete("cs_test_1");
+  avanzaMinuti(ambiente, 2);
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 200);
+  assert.equal(json.url, "https://checkout.stripe.test/cs_test_2");
+  assert.deepEqual(
+    ambiente.transazioni.map((t) => [t.riferimentoEsterno, t.stato]),
+    [["cs_test_1", "fallita"], ["cs_test_2", "in_attesa"]],
+  );
+  assert.deepEqual(
+    ambiente.transazioni[0].dataEsito,
+    new Date(INIZIO.getTime() + 2 * 60_000),
+  );
+  assert.equal(
+    sessioniCreate(ambiente)[1].idempotenza,
+    `pagamento_${QUOTA}_1_${FINESTRA}`,
+  );
+});
+
+Deno.test("sessione_404_con_altro_codice_resta_errore_502", async () => {
+  const ambiente = creaAmbiente();
+  await chiama(ambiente, PAGA);
+  const prima = structuredClone(ambiente.transazioni);
+  ambiente.guasti.set("GET /checkout/sessions/:id", {
+    stato: 404,
+    codice: "altro_codice",
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 502);
+  assert.ok(!JSON.stringify(json).includes("guasto"));
+  assert.equal(sessioniCreate(ambiente).length, 1);
+  assert.deepEqual(ambiente.transazioni, prima);
+});
+
 Deno.test("sessione_complete_nessuna_nuova_sessione_pagamento_in_verifica", async () => {
   const ambiente = creaAmbiente();
   await chiama(ambiente, PAGA);
@@ -568,6 +632,7 @@ Deno.test("sessione_complete_nessuna_nuova_sessione_pagamento_in_verifica", asyn
   const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 409);
+  assert.equal(json.codice, "pagamento_in_verifica");
   assert.equal(json.errore, "pagamento in verifica");
   assert.equal(sessioniCreate(ambiente).length, 1);
   assert.deepEqual(ambiente.transazioni.map((t) => t.stato), ["in_attesa"]);
@@ -622,9 +687,10 @@ Deno.test("errore_dell_autenticazione_restituisce_errore_con_header_cors", async
   ambiente.dipendenze.leggiUtente = () =>
     Promise.reject(new Error("Auth non raggiungibile"));
 
-  const { stato, risposta } = await chiama(ambiente, PAGA);
+  const { stato, json, risposta } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 500);
+  assert.equal(json.codice, "errore_interno");
   assert.equal(risposta.headers.get("Access-Control-Allow-Origin"), ORIGINE);
   assert.equal(ambiente.richiesteStripe.length, 0);
 });
@@ -666,7 +732,7 @@ Deno.test("onboarding_crea_account_express_it_e_salva_id", async () => {
   assert.equal(json.url, "https://connect.stripe.test/onboarding");
   const [account, link] = ambiente.richiesteStripe;
   assert.equal(account.percorso, "/accounts");
-  assert.equal(account.idempotenza, `onboarding_${GESTORE}`);
+  assert.equal(account.idempotenza, `onboarding_${GESTORE}_${FINESTRA}`);
   assert.equal(account.parametri.get("country"), "IT");
   assert.equal(
     account.parametri.get("controller[stripe_dashboard][type]"),
@@ -700,6 +766,55 @@ Deno.test("onboarding_crea_account_express_it_e_salva_id", async () => {
   assert.equal(
     link.parametri.get("refresh_url"),
     ENV_VALIDO.STRIPE_ACCOUNT_REFRESH_URL,
+  );
+  assert.equal(ambiente.gestori.get(GESTORE), "acct_test_1");
+});
+
+Deno.test("onboarding_stessa_chiave_di_idempotenza_nella_stessa_finestra", async () => {
+  const ambiente = creaAmbiente({ gestori: [[GESTORE, null]] });
+  // Stripe crea l'account ma il salvataggio dell'id fallisce: il nuovo tentativo
+  // 5 minuti dopo, nella stessa finestra, riceve da Stripe lo stesso account.
+  const salvaVera = ambiente.dipendenze.salvaIdAccountPagamenti;
+  ambiente.dipendenze.salvaIdAccountPagamenti = () =>
+    Promise.reject(new Error("DB non raggiungibile"));
+  const prima = await chiama(ambiente, ONBOARDING, GESTORE);
+  ambiente.dipendenze.salvaIdAccountPagamenti = salvaVera;
+  avanzaMinuti(ambiente, 5);
+  const seconda = await chiama(ambiente, ONBOARDING, GESTORE);
+
+  assert.equal(prima.stato, 500);
+  assert.equal(seconda.stato, 200);
+  const creazioni = ambiente.richiesteStripe.filter((r) =>
+    r.percorso === "/accounts"
+  );
+  const attesa = `onboarding_${GESTORE}_${FINESTRA}`;
+  assert.deepEqual(creazioni.map((r) => r.idempotenza), [attesa, attesa]);
+  assert.equal(ambiente.gestori.get(GESTORE), "acct_test_1");
+});
+
+Deno.test("onboarding_chiave_diversa_dopo_errore_500_nella_finestra_successiva", async () => {
+  const ambiente = creaAmbiente({ gestori: [[GESTORE, null]] });
+  ambiente.guasti.set("POST /accounts", { stato: 500 });
+  const prima = await chiama(ambiente, ONBOARDING, GESTORE);
+  // Stripe conserva il 500 per la chiave: nella stessa finestra resta l'errore.
+  ambiente.guasti.clear();
+  avanzaMinuti(ambiente, 3);
+  const stessaFinestra = await chiama(ambiente, ONBOARDING, GESTORE);
+  avanzaMinuti(ambiente, 7);
+  const finestraSuccessiva = await chiama(ambiente, ONBOARDING, GESTORE);
+
+  assert.equal(prima.stato, 502);
+  assert.equal(stessaFinestra.stato, 502);
+  assert.equal(finestraSuccessiva.stato, 200);
+  assert.deepEqual(
+    ambiente.richiesteStripe
+      .filter((r) => r.percorso === "/accounts")
+      .map((r) => r.idempotenza),
+    [
+      `onboarding_${GESTORE}_${FINESTRA}`,
+      `onboarding_${GESTORE}_${FINESTRA}`,
+      `onboarding_${GESTORE}_${FINESTRA + 1}`,
+    ],
   );
   assert.equal(ambiente.gestori.get(GESTORE), "acct_test_1");
 });
@@ -743,8 +858,152 @@ Deno.test("onboarding_link_fallito_id_account_gia_salvato", async () => {
 Deno.test("onboarding_rifiutato_se_non_gestore", async () => {
   const ambiente = creaAmbiente({ gestori: [[GESTORE, null]] });
 
-  const { stato } = await chiama(ambiente, ONBOARDING, GIOCATORE);
+  const { stato, json } = await chiama(ambiente, ONBOARDING, GIOCATORE);
 
   assert.equal(stato, 403);
+  assert.equal(json.codice, "non_gestore");
   assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+// --- Codici di errore senza un test dedicato (decisione dei PM su KCK-225) ---
+
+/** Chiama la funzione con un corpo grezzo e un metodo a scelta. */
+async function chiamaGrezzo(
+  ambiente: Ambiente,
+  metodo: string,
+  corpo: string | null,
+): Promise<{ stato: number; json: Record<string, unknown> }> {
+  const risposta = await gestisciRichiesta(
+    new Request("http://localhost/functions/v1/pagamenti", {
+      method: metodo,
+      headers: { Authorization: `Bearer jwt-${GIOCATORE}` },
+      body: corpo,
+    }),
+    ambiente.dipendenze,
+  );
+  return { stato: risposta.status, json: await risposta.json() };
+}
+
+Deno.test("corpo_non_valido_o_quota_id_mancante_codice_richiesta_non_valida", async () => {
+  const ambiente = creaAmbiente();
+
+  const corpoNonJson = await chiamaGrezzo(ambiente, "POST", "non e' json");
+  const corpoNonOggetto = await chiamaGrezzo(ambiente, "POST", "42");
+  const senzaQuota = await chiama(ambiente, { azione: "crea_pagamento" });
+
+  for (const r of [corpoNonJson, corpoNonOggetto, senzaQuota]) {
+    assert.equal(r.stato, 400);
+    assert.equal(r.json.codice, "richiesta_non_valida");
+  }
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("metodo_diverso_da_post_codice_metodo_non_ammesso", async () => {
+  const ambiente = creaAmbiente();
+
+  const { stato, json } = await chiamaGrezzo(ambiente, "GET", null);
+
+  assert.equal(stato, 405);
+  assert.equal(json.codice, "metodo_non_ammesso");
+});
+
+Deno.test("azione_sconosciuta_codice_azione_non_valida", async () => {
+  const ambiente = creaAmbiente();
+
+  const { stato, json } = await chiama(ambiente, { azione: "rimborsa" });
+
+  assert.equal(stato, 400);
+  assert.equal(json.codice, "azione_non_valida");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("quota_rimborsata_codice_quota_rimborsata", async () => {
+  const ambiente = creaAmbiente({ quota: { statoVersamento: "rimborsata" } });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "quota_rimborsata");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("stato_versamento_non_ammesso_codice_errore_interno", async () => {
+  const ambiente = creaAmbiente({ quota: { statoVersamento: "sconosciuto" } });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 500);
+  assert.equal(json.codice, "errore_interno");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+/**
+ * Simula una richiesta concorrente: la prima lettura dei pagamenti e' vuota,
+ * poi compare `transazione`, registrata dall'altra richiesta, e l'inserimento
+ * di questa va in conflitto (23505).
+ */
+function simulaConflitto(
+  ambiente: Ambiente,
+  transazione: { stato: string; riferimentoEsterno: string } | null,
+): void {
+  const leggiVera = ambiente.dipendenze.leggiPagamentiQuota;
+  let letture = 0;
+  ambiente.dipendenze.leggiPagamentiQuota = (id) => {
+    letture += 1;
+    return letture === 1 ? Promise.resolve([]) : leggiVera(id);
+  };
+  ambiente.dipendenze.creaTransazione = () =>
+    Promise.resolve("conflitto" as const);
+  if (transazione) {
+    ambiente.transazioni.push({
+      id: "tr-concorrente",
+      quotaId: QUOTA,
+      importo: 8.29,
+      ...transazione,
+    });
+  }
+}
+
+Deno.test("conflitto_23505_con_pagamento_completata_codice_pagamento_in_verifica", async () => {
+  const ambiente = creaAmbiente();
+  simulaConflitto(ambiente, {
+    stato: "completata",
+    riferimentoEsterno: "cs_test_concorrente",
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "pagamento_in_verifica");
+});
+
+Deno.test("conflitto_23505_senza_pagamento_in_attesa_codice_pagamento_in_corso", async () => {
+  const ambiente = creaAmbiente();
+  // L'altra richiesta e' gia' passata a fallita prima della rilettura.
+  simulaConflitto(ambiente, {
+    stato: "fallita",
+    riferimentoEsterno: "cs_test_concorrente",
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "pagamento_in_corso");
+});
+
+Deno.test("conflitto_23505_con_sessione_scaduta_codice_pagamento_in_corso", async () => {
+  const ambiente = creaAmbiente();
+  ambiente.sessioni.set("cs_test_concorrente", {
+    status: "expired",
+    url: "https://checkout.stripe.test/cs_test_concorrente",
+  });
+  simulaConflitto(ambiente, {
+    stato: "in_attesa",
+    riferimentoEsterno: "cs_test_concorrente",
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "pagamento_in_corso");
 });

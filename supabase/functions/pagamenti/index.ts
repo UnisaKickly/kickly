@@ -139,7 +139,12 @@ export async function gestisciRichiesta(
   const configurazione = leggiConfigurazione(dipendenze.env);
   if (configurazione === null) {
     console.error("pagamenti: configurazione non valida");
-    return rispondi(500, { errore: "configurazione non valida" }, null);
+    return rispondiErrore(
+      500,
+      "configurazione_non_valida",
+      "configurazione non valida",
+      null,
+    );
   }
   const origine = configurazione.origineConsentita;
 
@@ -151,7 +156,12 @@ export async function gestisciRichiesta(
     });
   }
   if (req.method !== "POST") {
-    return rispondi(405, { errore: "metodo non ammesso" }, origine);
+    return rispondiErrore(
+      405,
+      "metodo_non_ammesso",
+      "metodo non ammesso",
+      origine,
+    );
   }
 
   // Tutto cio' che segue e' dentro il try, autenticazione compresa: anche un
@@ -163,7 +173,12 @@ export async function gestisciRichiesta(
     );
     const accountId = token ? await dipendenze.leggiUtente(token) : null;
     if (accountId === null) {
-      return rispondi(401, { errore: "utente non autenticato" }, origine);
+      return rispondiErrore(
+        401,
+        "non_autenticato",
+        "utente non autenticato",
+        origine,
+      );
     }
 
     let corpo: Record<string, unknown>;
@@ -172,9 +187,10 @@ export async function gestisciRichiesta(
       if (typeof json !== "object" || json === null) throw new Error();
       corpo = json as Record<string, unknown>;
     } catch {
-      return rispondi(
+      return rispondiErrore(
         400,
-        { errore: "corpo della richiesta non valido" },
+        "richiesta_non_valida",
+        "corpo della richiesta non valido",
         origine,
       );
     }
@@ -184,7 +200,12 @@ export async function gestisciRichiesta(
         return await onboardingGestore(accountId, configurazione, dipendenze);
       case "crea_pagamento":
         if (typeof corpo.quota_id !== "string" || corpo.quota_id === "") {
-          return rispondi(400, { errore: "quota_id mancante" }, origine);
+          return rispondiErrore(
+            400,
+            "richiesta_non_valida",
+            "quota_id mancante",
+            origine,
+          );
         }
         return await creaPagamento(
           accountId,
@@ -193,7 +214,12 @@ export async function gestisciRichiesta(
           dipendenze,
         );
       default:
-        return rispondi(400, { errore: "azione sconosciuta" }, origine);
+        return rispondiErrore(
+          400,
+          "azione_non_valida",
+          "azione sconosciuta",
+          origine,
+        );
     }
   } catch (errore) {
     if (errore instanceof ErroreStripe) {
@@ -202,9 +228,10 @@ export async function gestisciRichiesta(
       console.error(
         `pagamenti: errore Stripe (stato ${errore.stato ?? "rete"})`,
       );
-      return rispondi(
+      return rispondiErrore(
         502,
-        { errore: "servizio di pagamento non disponibile, riprova" },
+        "servizio_pagamento_non_disponibile",
+        "servizio di pagamento non disponibile, riprova",
         origine,
       );
     }
@@ -212,17 +239,26 @@ export async function gestisciRichiesta(
       "pagamenti: errore interno",
       errore instanceof Error ? errore.name : "",
     );
-    return rispondi(500, { errore: "errore interno" }, origine);
+    return rispondiErrore(500, "errore_interno", "errore interno", origine);
   }
 }
+
+/**
+ * Durata della finestra delle chiavi di idempotenza (pagamento e onboarding):
+ * 10 minuti. Serve perche' Stripe conserva per 24 ore anche le risposte 500
+ * associate a una chiave: con la finestra, dopo un errore si puo' riprovare
+ * dalla finestra successiva (decisione dei PM su KCK-225).
+ */
+const FINESTRA_IDEMPOTENZA_MS = 600_000;
 
 /**
  * Azione `onboarding_gestore` (D3, RF_PAG_2).
  *
  * Ordine delle chiamate (non c'e' sequence diagram):
  * 1. leggiGestoreCampo(): solo un Gestore del Campo puo' collegare un account;
- * 2. collegaAccountGestore(): se manca l'account lo crea su Stripe e lo fa
- *    salvare con salvaIdAccountPagamenti() prima di chiedere il link;
+ * 2. collegaAccountGestore(): se manca l'account lo crea su Stripe con la chiave
+ *    `onboarding_<account_id>_<finestra>` e lo fa salvare con
+ *    salvaIdAccountPagamenti() prima di chiedere il link;
  * 3. risposta con l'URL dell'onboarding ospitato da Stripe.
  */
 async function onboardingGestore(
@@ -233,27 +269,33 @@ async function onboardingGestore(
   const origine = configurazione.origineConsentita;
   const gestore = await dipendenze.leggiGestoreCampo(accountId);
   if (gestore === null) {
-    return rispondi(403, {
-      errore: "solo il Gestore del Campo puo' collegare un account",
-    }, origine);
+    return rispondiErrore(
+      403,
+      "non_gestore",
+      "solo il Gestore del Campo puo' collegare un account",
+      origine,
+    );
   }
 
   const collegamento = await collegaAccountGestore(
     dipendenze.fetch,
     configurazione.chiaveSegretaStripe,
     {
-      accountId,
       idAccountPagamenti: gestore.idAccountPagamenti,
       urlRitorno: configurazione.urlRitornoAccount,
       urlAggiornamento: configurazione.urlAggiornamentoAccount,
+      // Stessa finestra di 10 minuti del pagamento, stesso orologio iniettato.
+      // Un account creato su Stripe ma non salvato (errore tra le due finestre)
+      // resta orfano solo in modalita' test e non ha effetti; una volta salvato,
+      // idAccountPagamenti impedisce altri duplicati.
+      chiaveIdempotenza: `onboarding_${accountId}_${
+        Math.floor(dipendenze.adesso().getTime() / FINESTRA_IDEMPOTENZA_MS)
+      }`,
       salvaIdAccount: (id) => dipendenze.salvaIdAccountPagamenti(accountId, id),
     },
   );
   return rispondi(200, { url: collegamento.url }, origine);
 }
-
-/** Durata della finestra della chiave di idempotenza del pagamento: 10 minuti. */
-const FINESTRA_IDEMPOTENZA_MS = 600_000;
 
 /**
  * Azione `crea_pagamento` (RF_PAG_1, UC_PAG_1, D25, D27).
@@ -264,7 +306,8 @@ const FINESTRA_IDEMPOTENZA_MS = 600_000;
  * 2. leggiPagamentiQuota(): se c'e' un pagamento completata si risponde
  *    "pagamento in verifica" senza chiamare Stripe; se ce n'e' uno in_attesa si guarda la
  *    sessione su Stripe (open: stesso URL; complete: si attende il webhook di
- *    KCK-231; expired: la transazione diventa fallita e se ne crea una nuova);
+ *    KCK-231; expired o non trovata da Stripe (404 resource_missing): la
+ *    transazione diventa fallita e se ne crea una nuova);
  * 3. creaSessioneCheckout() con l'importo letto dal DB e la chiave di idempotenza
  *    `pagamento_<quota_id>_<n>_<finestra>`, n = pagamenti falliti della Quota,
  *    finestra = adesso / 10 minuti;
@@ -283,24 +326,50 @@ async function creaPagamento(
   //    una Quota inesistente, per non rivelarne l'esistenza.
   const quota = await dipendenze.leggiQuota(quotaId);
   if (quota === null || quota.giocatoreId !== accountId) {
-    return rispondi(404, { errore: "quota non trovata" }, origine);
+    return rispondiErrore(
+      404,
+      "quota_non_trovata",
+      "quota non trovata",
+      origine,
+    );
   }
   if (quota.rispostaStato !== "confermata") {
-    return rispondi(
+    return rispondiErrore(
       409,
-      { errore: "non risulti iscritto alla partita" },
+      "non_iscritto",
+      "non risulti iscritto alla partita",
       origine,
     );
   }
   if (quota.statoPartita !== "Completa") {
-    return rispondi(
+    return rispondiErrore(
       409,
-      { errore: "la partita non e' nello stato Completa" },
+      "partita_non_completa",
+      "la partita non e' nello stato Completa",
+      origine,
+    );
+  }
+  // versata e rimborsata hanno codici distinti: una Quota rimborsata non e'
+  // "gia' versata". Ogni altro valore e' escluso dal CHECK del DB (D25), quindi
+  // e' un guasto del server e diventa errore_interno.
+  if (quota.statoVersamento === "versata") {
+    return rispondiErrore(
+      409,
+      "quota_gia_versata",
+      "la quota non e' da versare",
+      origine,
+    );
+  }
+  if (quota.statoVersamento === "rimborsata") {
+    return rispondiErrore(
+      409,
+      "quota_rimborsata",
+      "la quota non e' da versare",
       origine,
     );
   }
   if (quota.statoVersamento !== "da_versare") {
-    return rispondi(409, { errore: "la quota non e' da versare" }, origine);
+    throw new Error("stato_versamento non ammesso");
   }
   const termine = new Date(quota.termineVersamento).getTime();
   if (Number.isNaN(termine)) {
@@ -310,9 +379,10 @@ async function creaPagamento(
   // idempotenza si calcolano sullo stesso orologio (iniettato nei test).
   const adesso = dipendenze.adesso().getTime();
   if (termine <= adesso) {
-    return rispondi(
+    return rispondiErrore(
       409,
-      { errore: "il termine per il versamento e' scaduto" },
+      "termine_scaduto",
+      "il termine per il versamento e' scaduto",
       origine,
     );
   }
@@ -333,20 +403,21 @@ async function creaPagamento(
   // il webhook di KCK-231 senza chiamare Stripe, per non creare una seconda
   // sessione per la stessa Quota (DG2).
   if (pagamenti.some((t) => t.stato === "completata")) {
-    return rispondi(409, { errore: "pagamento in verifica" }, origine);
+    return rispostaPagamentoInVerifica(origine);
   }
   let falliti = pagamenti.filter((t) => t.stato === "fallita").length;
   const inAttesa = pagamenti.find((t) => t.stato === "in_attesa");
   if (inAttesa !== undefined) {
-    const sessione = await leggiSessioneCheckout(
-      dipendenze.fetch,
+    const sessione = await leggiSessioneSeEsiste(
+      dipendenze,
       chiave,
       inAttesa.riferimentoEsterno,
     );
-    if (sessione.status !== "expired") {
+    if (sessione !== null && sessione.status !== "expired") {
       return rispostaSessioneEsistente(sessione, origine);
     }
-    // Sessione scaduta: non ha addebitato nulla, il Giocatore puo' riprovare.
+    // Sessione scaduta o che Stripe non trova: non ha addebitato nulla, il
+    // Giocatore puo' riprovare.
     await dipendenze.segnaTransazioneFallita(inAttesa.id, new Date(adesso));
     falliti += 1;
   }
@@ -376,16 +447,17 @@ async function creaPagamento(
     riferimentoEsterno: sessione.id,
   });
   if (esito === "conflitto") {
-    // Richiesta concorrente: l'indice univoco del DB ha gia' una Transazione
-    // in_attesa per la Quota. Si restituisce la sessione gia' registrata.
-    const registrata = (await dipendenze.leggiPagamentiQuota(quotaId))
-      .find((t) => t.stato === "in_attesa");
+    // Richiesta concorrente: l'indice univoco del DB ha gia' un pagamento non
+    // fallito per la Quota. Se e' completata si attende il webhook; se e'
+    // in_attesa si restituisce la sua sessione; negli altri casi la situazione
+    // e' transitoria e un nuovo tentativo funziona (pagamento_in_corso).
+    const riletti = await dipendenze.leggiPagamentiQuota(quotaId);
+    if (riletti.some((t) => t.stato === "completata")) {
+      return rispostaPagamentoInVerifica(origine);
+    }
+    const registrata = riletti.find((t) => t.stato === "in_attesa");
     if (registrata === undefined) {
-      return rispondi(
-        409,
-        { errore: "pagamento gia' in corso, riprova" },
-        origine,
-      );
+      return rispostaPagamentoInCorso(origine);
     }
     const esistente = registrata.riferimentoEsterno === sessione.id
       ? sessione
@@ -395,16 +467,36 @@ async function creaPagamento(
         registrata.riferimentoEsterno,
       );
     if (esistente.status === "expired") {
-      return rispondi(
-        409,
-        { errore: "pagamento gia' in corso, riprova" },
-        origine,
-      );
+      return rispostaPagamentoInCorso(origine);
     }
     return rispostaSessioneEsistente(esistente, origine);
   }
 
   return rispondi(200, { url: sessione.url }, origine);
+}
+
+/**
+ * Legge la sessione di un pagamento in_attesa. Restituisce null se Stripe
+ * risponde 404 con `error.code` = `resource_missing`: la sessione non esiste e
+ * si tratta come scaduta (decisione dei PM su KCK-225). Ogni altro errore,
+ * compreso un 404 con un altro codice, si propaga e diventa un 502.
+ */
+async function leggiSessioneSeEsiste(
+  dipendenze: Dipendenze,
+  chiave: string,
+  idSessione: string,
+): Promise<SessioneCheckout | null> {
+  try {
+    return await leggiSessioneCheckout(dipendenze.fetch, chiave, idSessione);
+  } catch (errore) {
+    if (
+      errore instanceof ErroreStripe && errore.stato === 404 &&
+      errore.codice === "resource_missing"
+    ) {
+      return null;
+    }
+    throw errore;
+  }
 }
 
 /**
@@ -417,9 +509,29 @@ function rispostaSessioneEsistente(
   origine: string,
 ): Response {
   if (sessione.status === "complete") {
-    return rispondi(409, { errore: "pagamento in verifica" }, origine);
+    return rispostaPagamentoInVerifica(origine);
   }
   return rispondi(200, { url: sessione.url }, origine);
+}
+
+/** Pagamento gia' completato su Stripe, in attesa del webhook di KCK-231. */
+function rispostaPagamentoInVerifica(origine: string): Response {
+  return rispondiErrore(
+    409,
+    "pagamento_in_verifica",
+    "pagamento in verifica",
+    origine,
+  );
+}
+
+/** Richiesta concorrente in una situazione transitoria: si puo' riprovare. */
+function rispostaPagamentoInCorso(origine: string): Response {
+  return rispondiErrore(
+    409,
+    "pagamento_in_corso",
+    "pagamento gia' in corso, riprova",
+    origine,
+  );
 }
 
 /** Header CORS: solo l'origine dell'app web, mai `*`. */
@@ -431,6 +543,39 @@ function intestazioniCors(origine: string): Record<string, string> {
       "authorization, x-client-info, apikey, content-type",
     "Vary": "Origin",
   };
+}
+
+/**
+ * Codici stabili delle risposte di errore (decisione dei PM su KCK-225): l'app
+ * decide cosa mostrare dal codice, non dal testo di `errore`. I testi per il
+ * Giocatore sono di KCK-214.
+ */
+type CodiceErrore =
+  | "richiesta_non_valida"
+  | "metodo_non_ammesso"
+  | "azione_non_valida"
+  | "non_autenticato"
+  | "non_gestore"
+  | "quota_non_trovata"
+  | "non_iscritto"
+  | "partita_non_completa"
+  | "termine_scaduto"
+  | "quota_gia_versata"
+  | "quota_rimborsata"
+  | "pagamento_in_verifica"
+  | "pagamento_in_corso"
+  | "servizio_pagamento_non_disponibile"
+  | "configurazione_non_valida"
+  | "errore_interno";
+
+/** Risposta di errore: `codice` stabile accanto al testo `errore`. */
+function rispondiErrore(
+  stato: number,
+  codice: CodiceErrore,
+  errore: string,
+  origine: string | null,
+): Response {
+  return rispondi(stato, { codice, errore }, origine);
 }
 
 /** Risposta JSON con gli header CORS (assenti se la configurazione non e' valida). */

@@ -27,6 +27,31 @@ Tutte le richieste sono `POST` con il JWT dell'utente nell'header
 
 L'importo non si manda: lo legge il server da `quota.importo`.
 
+## Codici di errore
+
+Ogni risposta di errore ha la forma `{ "codice": ..., "errore": ... }`. Il campo
+`codice` è stabile e l'app decide da lì cosa mostrare; `errore` è un testo
+tecnico. I testi per il Giocatore arrivano con KCK-214.
+
+| Codice                               | Stato HTTP | Quando                                                                                                                                                                  |
+| ------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `richiesta_non_valida`               | 400        | il corpo non è un oggetto JSON, oppure in `crea_pagamento` manca `quota_id`                                                                                             |
+| `azione_non_valida`                  | 400        | `azione` assente o diversa da `onboarding_gestore` e `crea_pagamento`                                                                                                   |
+| `non_autenticato`                    | 401        | JWT assente o non valido                                                                                                                                                |
+| `non_gestore`                        | 403        | `onboarding_gestore` chiamato da un utente che non è Gestore del Campo                                                                                                  |
+| `quota_non_trovata`                  | 404        | la Quota non esiste o appartiene a un altro Giocatore                                                                                                                   |
+| `metodo_non_ammesso`                 | 405        | metodo diverso da `POST` e `OPTIONS`                                                                                                                                    |
+| `non_iscritto`                       | 409        | la Partecipazione della Quota non è `confermata` (UC_PAG_1)                                                                                                             |
+| `partita_non_completa`               | 409        | la Partita non è nello stato `Completa` (UC_PAG_1)                                                                                                                      |
+| `quota_gia_versata`                  | 409        | `stato_versamento` = `versata`                                                                                                                                          |
+| `quota_rimborsata`                   | 409        | `stato_versamento` = `rimborsata`                                                                                                                                       |
+| `termine_scaduto`                    | 409        | il termine di versamento è passato (UC_PAG_1)                                                                                                                           |
+| `pagamento_in_verifica`              | 409        | la Quota ha un pagamento `completata`, oppure la sessione `in_attesa` risulta `complete` su Stripe: si attende il webhook di KCK-231                                    |
+| `pagamento_in_corso`                 | 409        | richiesta concorrente (conflitto 23505) senza un pagamento `in_attesa` da riusare, o con la sessione dell'altra richiesta scaduta: un nuovo tentativo funziona          |
+| `configurazione_non_valida`          | 500        | manca una variabile d'ambiente, un URL non è valido o la chiave non è `sk_test_`. È l'unica risposta senza header CORS, perché l'origine si ricava dalla configurazione |
+| `errore_interno`                     | 500        | errore inatteso del server: DB o autenticazione non raggiungibili, importo non numerico, `stato_versamento` non ammesso dal CHECK                                       |
+| `servizio_pagamento_non_disponibile` | 502        | Stripe ha risposto con un errore o non è raggiungibile (E2), compreso un 404 diverso da `resource_missing`                                                              |
+
 ## Chiave di idempotenza del pagamento
 
 `crea_pagamento` manda a Stripe l'header `Idempotency-Key` con il valore
@@ -52,6 +77,21 @@ Tra due finestre diverse non nascono due URL validi per la stessa Quota:
 - se due richieste concorrenti superano insieme questi controlli, l'indice
   univoco su `transazione` (un solo pagamento non fallito per Quota, D27) fa
   scattare il conflitto e la funzione restituisce la sessione già registrata.
+
+## Chiave di idempotenza dell'onboarding
+
+`onboarding_gestore` crea l'account Stripe del Gestore con la chiave
+`onboarding_<account_id>_<finestra>`. La finestra è la stessa del pagamento:
+`Math.floor(adesso / 600000)`, con la stessa costante e lo stesso orologio.
+
+Il motivo è lo stesso: senza finestra, un errore 500 su `POST /v1/accounts`
+resterebbe legato alla chiave per 24 ore e il Gestore non potrebbe collegare
+l'account per un giorno intero.
+
+Un account creato su Stripe ma non salvato può restare orfano se l'errore cade a
+cavallo di due finestre. In modalità test non ha effetti. Appena l'id è salvato
+in `gestore_campo.id_account_pagamenti`, i tentativi successivi riusano
+quell'account e non ne creano altri.
 
 ## Variabili d'ambiente
 
