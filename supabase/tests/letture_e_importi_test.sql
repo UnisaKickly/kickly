@@ -3,7 +3,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(18);
+SELECT plan(19);
 
 CREATE FUNCTION pg_temp.crea_utente(
     p_id uuid,
@@ -226,6 +226,17 @@ SELECT results_eq(
       )$$,
     $$VALUES ('Mario'::text, 'Rossi'::text, 'Attaccante'::text, 'Destro'::text)$$,
     'un utente autenticato legge nome e Player Card senza dati account'
+);
+
+-- Senza id (NULL) o con un array vuoto la funzione non restituisce nessun
+-- profilo: nessun utente puo' elencare l'intera anagrafica (revisione dei PM).
+SELECT is(
+    (SELECT count(*)::integer
+       FROM public.get_profili_pubblici(NULL::uuid[])) +
+    (SELECT count(*)::integer
+       FROM public.get_profili_pubblici(ARRAY[]::uuid[])),
+    0,
+    'get_profili_pubblici senza id o con array vuoto non restituisce nessun profilo'
 );
 
 RESET ROLE;

@@ -1,8 +1,13 @@
 -- Migration: letture_e_importi (KCK-271).
 -- RPC pubbliche con dati minimizzati e trigger per importi, scadenze e RSVP organizzatore.
 
+-- I profili si chiedono solo per id gia' noti (per esempio i membri di una
+-- lega o i partecipanti di una partita): senza id, o con un array vuoto, la
+-- funzione non restituisce niente. Altrimenti qualunque utente autenticato
+-- potrebbe elencare nome e cognome di tutta l'anagrafica (KCK-271, revisione
+-- dei PM).
 CREATE OR REPLACE FUNCTION public.get_profili_pubblici(
-    p_account_ids uuid[] DEFAULT NULL
+    p_account_ids uuid[]
 )
 RETURNS TABLE (
     id uuid,
@@ -25,8 +30,7 @@ AS $$
     FROM public.account AS account
     JOIN public.giocatore AS giocatore
         ON giocatore.account_id = account.id
-    WHERE p_account_ids IS NULL
-       OR account.id = ANY (p_account_ids);
+    WHERE account.id = ANY (p_account_ids);
 $$;
 
 COMMENT ON FUNCTION public.get_profili_pubblici(uuid[]) IS
