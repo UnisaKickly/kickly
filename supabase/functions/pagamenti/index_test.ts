@@ -50,7 +50,11 @@ type Guasto = { stato: number } | "rete";
 interface Ambiente {
   dipendenze: Dipendenze;
   richiesteStripe: RichiestaStripe[];
-  transazioni: (TransazionePagamento & { quotaId: string; importo: number })[];
+  transazioni: (TransazionePagamento & {
+    quotaId: string;
+    importo: number;
+    dataEsito?: Date;
+  })[];
   sessioni: Map<string, { status: string; url: string }>;
   gestori: Map<string, string | null>;
   guasti: Map<string, Guasto>;
@@ -204,9 +208,12 @@ function creaAmbiente(opzioni: {
       });
       return Promise.resolve("creata" as const);
     },
-    segnaTransazioneFallita: (id) => {
+    segnaTransazioneFallita: (id, dataEsito) => {
       const t = ambiente.transazioni.find((t) => t.id === id);
-      if (t) t.stato = "fallita";
+      if (t) {
+        t.stato = "fallita";
+        t.dataEsito = dataEsito;
+      }
       return Promise.resolve();
     },
     leggiGestoreCampo: (id) =>
@@ -508,6 +515,51 @@ Deno.test("sessione_expired_segna_fallita_e_crea_nuova_sessione", async () => {
   );
 });
 
+Deno.test("transazione_scaduta_segnata_fallita_con_l_istante_della_richiesta", async () => {
+  const ambiente = creaAmbiente();
+  await chiama(ambiente, PAGA);
+  ambiente.sessioni.get("cs_test_1")!.status = "expired";
+  avanzaMinuti(ambiente, 2);
+
+  await chiama(ambiente, PAGA);
+
+  assert.deepEqual(
+    ambiente.transazioni[0].dataEsito,
+    new Date(INIZIO.getTime() + 2 * 60_000),
+  );
+});
+
+Deno.test("pagamento_completata_risponde_in_verifica_senza_chiamare_stripe", async () => {
+  const ambiente = creaAmbiente();
+  ambiente.transazioni.push({
+    id: "tr-completata",
+    quotaId: QUOTA,
+    importo: 8.29,
+    stato: "completata",
+    riferimentoEsterno: "cs_test_completata",
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.errore, "pagamento in verifica");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+  assert.equal(ambiente.transazioni.length, 1);
+});
+
+Deno.test("errore_stripe_sulla_lettura_della_sessione_esistente_gestito", async () => {
+  const ambiente = creaAmbiente();
+  await chiama(ambiente, PAGA);
+  const prima = structuredClone(ambiente.transazioni);
+  ambiente.guasti.set("GET /checkout/sessions/:id", { stato: 500 });
+
+  const { stato } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 502);
+  assert.equal(sessioniCreate(ambiente).length, 1);
+  assert.deepEqual(ambiente.transazioni, prima);
+});
+
 Deno.test("sessione_complete_nessuna_nuova_sessione_pagamento_in_verifica", async () => {
   const ambiente = creaAmbiente();
   await chiama(ambiente, PAGA);
@@ -564,6 +616,18 @@ Deno.test("sessione_contiene_metadata_quota_id_e_transfer_group_partita", async 
 });
 
 // --- CORS ---
+
+Deno.test("errore_dell_autenticazione_restituisce_errore_con_header_cors", async () => {
+  const ambiente = creaAmbiente();
+  ambiente.dipendenze.leggiUtente = () =>
+    Promise.reject(new Error("Auth non raggiungibile"));
+
+  const { stato, risposta } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 500);
+  assert.equal(risposta.headers.get("Access-Control-Allow-Origin"), ORIGINE);
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
 
 Deno.test("options_restituisce_header_cors", async () => {
   const ambiente = creaAmbiente();

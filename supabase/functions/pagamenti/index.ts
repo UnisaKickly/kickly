@@ -72,7 +72,11 @@ export interface Dipendenze {
     importo: number;
     riferimentoEsterno: string;
   }) => Promise<"creata" | "conflitto">;
-  segnaTransazioneFallita: (transazioneId: string) => Promise<void>;
+  /** `dataEsito` e' l'istante della richiesta (Dipendenze.adesso). */
+  segnaTransazioneFallita: (
+    transazioneId: string,
+    dataEsito: Date,
+  ) => Promise<void>;
   leggiGestoreCampo: (
     accountId: string,
   ) => Promise<{ idAccountPagamenti: string | null } | null>;
@@ -150,26 +154,31 @@ export async function gestisciRichiesta(
     return rispondi(405, { errore: "metodo non ammesso" }, origine);
   }
 
-  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-  const accountId = token ? await dipendenze.leggiUtente(token) : null;
-  if (accountId === null) {
-    return rispondi(401, { errore: "utente non autenticato" }, origine);
-  }
-
-  let corpo: Record<string, unknown>;
+  // Tutto cio' che segue e' dentro il try, autenticazione compresa: anche un
+  // errore di leggiUtente diventa una risposta con gli header CORS.
   try {
-    const json = await req.json();
-    if (typeof json !== "object" || json === null) throw new Error();
-    corpo = json as Record<string, unknown>;
-  } catch {
-    return rispondi(
-      400,
-      { errore: "corpo della richiesta non valido" },
-      origine,
+    const token = req.headers.get("Authorization")?.replace(
+      /^Bearer\s+/i,
+      "",
     );
-  }
+    const accountId = token ? await dipendenze.leggiUtente(token) : null;
+    if (accountId === null) {
+      return rispondi(401, { errore: "utente non autenticato" }, origine);
+    }
 
-  try {
+    let corpo: Record<string, unknown>;
+    try {
+      const json = await req.json();
+      if (typeof json !== "object" || json === null) throw new Error();
+      corpo = json as Record<string, unknown>;
+    } catch {
+      return rispondi(
+        400,
+        { errore: "corpo della richiesta non valido" },
+        origine,
+      );
+    }
+
     switch (corpo.azione) {
       case "onboarding_gestore":
         return await onboardingGestore(accountId, configurazione, dipendenze);
@@ -252,7 +261,8 @@ const FINESTRA_IDEMPOTENZA_MS = 600_000;
  * Ordine delle chiamate:
  * 1. leggiQuota(): verifica le entry condition di UC_PAG_1 (Quota del chiamante,
  *    iscritto, partita Completa, Quota da_versare, termine non scaduto);
- * 2. leggiPagamentiQuota(): se c'e' gia' un pagamento in_attesa si guarda la
+ * 2. leggiPagamentiQuota(): se c'e' un pagamento completata si risponde
+ *    "pagamento in verifica" senza chiamare Stripe; se ce n'e' uno in_attesa si guarda la
  *    sessione su Stripe (open: stesso URL; complete: si attende il webhook di
  *    KCK-231; expired: la transazione diventa fallita e se ne crea una nuova);
  * 3. creaSessioneCheckout() con l'importo letto dal DB e la chiave di idempotenza
@@ -319,6 +329,12 @@ async function creaPagamento(
 
   // 2. Pagamento gia' avviato per questa Quota.
   const pagamenti = await dipendenze.leggiPagamentiQuota(quotaId);
+  // Pagamento gia' completato su Stripe ma Quota non ancora versata: si attende
+  // il webhook di KCK-231 senza chiamare Stripe, per non creare una seconda
+  // sessione per la stessa Quota (DG2).
+  if (pagamenti.some((t) => t.stato === "completata")) {
+    return rispondi(409, { errore: "pagamento in verifica" }, origine);
+  }
   let falliti = pagamenti.filter((t) => t.stato === "fallita").length;
   const inAttesa = pagamenti.find((t) => t.stato === "in_attesa");
   if (inAttesa !== undefined) {
@@ -331,7 +347,7 @@ async function creaPagamento(
       return rispostaSessioneEsistente(sessione, origine);
     }
     // Sessione scaduta: non ha addebitato nulla, il Giocatore puo' riprovare.
-    await dipendenze.segnaTransazioneFallita(inAttesa.id);
+    await dipendenze.segnaTransazioneFallita(inAttesa.id, new Date(adesso));
     falliti += 1;
   }
 
@@ -510,10 +526,10 @@ function creaDipendenzeSupabase(): Dipendenze {
       return "creata";
     },
 
-    async segnaTransazioneFallita(transazioneId) {
+    async segnaTransazioneFallita(transazioneId, dataEsito) {
       const { error } = await db
         .from("transazione")
-        .update({ stato: "fallita", data_esito: new Date().toISOString() })
+        .update({ stato: "fallita", data_esito: dataEsito.toISOString() })
         .eq("id", transazioneId)
         .eq("stato", "in_attesa");
       if (error) throw new Error(`segnaTransazioneFallita: ${error.code}`);

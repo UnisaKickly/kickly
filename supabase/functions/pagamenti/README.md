@@ -41,10 +41,17 @@ sessione, quindi non c'è un doppio addebito (DG2).
 
 La finestra serve perché Stripe conserva per 24 ore la risposta associata a una
 chiave, **anche se era un errore 500**. Senza finestra, dopo un 500 ogni nuovo
-tentativo riceverebbe lo stesso errore per un giorno intero. Tra due finestre
-diverse non nascono due URL validi per la stessa Quota: l'indice univoco su
-`transazione` ammette un solo pagamento non fallito per Quota (D27). Se scatta
-il conflitto, la funzione restituisce la sessione già registrata.
+tentativo riceverebbe lo stesso errore per un giorno intero.
+
+Tra due finestre diverse non nascono due URL validi per la stessa Quota:
+
+- se la Quota ha già un pagamento `completata`, la funzione risponde "pagamento
+  in verifica" senza chiamare Stripe (si attende il webhook di KCK-231);
+- se ne ha uno `in_attesa`, riusa la sua sessione: stesso URL se è aperta,
+  "pagamento in verifica" se è completa, nuova sessione solo se è scaduta;
+- se due richieste concorrenti superano insieme questi controlli, l'indice
+  univoco su `transazione` (un solo pagamento non fallito per Quota, D27) fa
+  scattare il conflitto e la funzione restituisce la sessione già registrata.
 
 ## Variabili d'ambiente
 
