@@ -182,10 +182,53 @@ class SupabaseAccountRepository implements AccountRepository {
           stackTrace: stackTrace,
         );
       }
+      // Rifiuti di Auth che l'utente puo' risolvere: hanno un messaggio
+      // specifico (UC_ACC_1 E2) invece di quello generico sui permessi.
+      final AppException? specifico = _erroreRegistrazioneSpecifico(
+        error,
+        stackTrace,
+      );
+      if (specifico != null) {
+        throw specifico;
+      }
       throw translateSupabaseError(error, stackTrace: stackTrace);
     } catch (error, stackTrace) {
       throw translateSupabaseError(error, stackTrace: stackTrace);
     }
+  }
+
+  /// Traduce in un errore leggibile i rifiuti di Auth risolvibili dall'utente.
+  ///
+  /// Riconosce l'email rifiutata dal servizio (`email_address_invalid`, per
+  /// esempio un dominio non ammesso) e il limite di richieste o di invii di
+  /// email (`over_*_rate_limit`, stato 429). Per ogni altro caso restituisce
+  /// null e si usa la traduzione comune, che non cambia (lib/core/).
+  AppException? _erroreRegistrazioneSpecifico(
+    AuthException error,
+    StackTrace stackTrace,
+  ) {
+    if (error.code == 'email_address_invalid') {
+      return AppException(
+        message: 'Indirizzo email non valido. Controllalo o usane un altro.',
+        code: AccountRepository.codiceEmailNonValida,
+        originalError: error,
+        stackTrace: stackTrace,
+      );
+    }
+    final bool limiteRichieste =
+        error.statusCode == '429' ||
+        error.code == 'over_email_send_rate_limit' ||
+        error.code == 'over_request_rate_limit';
+    if (limiteRichieste) {
+      return AppException(
+        message:
+            'Troppi tentativi di registrazione. Riprova tra qualche minuto.',
+        code: AccountRepository.codiceTroppeRichieste,
+        originalError: error,
+        stackTrace: stackTrace,
+      );
+    }
+    return null;
   }
 
   /// Riconosce i codici di Auth che indicano una registrazione duplicata.

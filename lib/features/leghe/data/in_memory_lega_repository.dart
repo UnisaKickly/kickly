@@ -102,6 +102,11 @@ class InMemoryLegaRepository implements LegaRepository {
   }
 
   @override
+  Future<List<String>> findMembri(String legaId) async {
+    return List<String>.of(_membri[legaId] ?? const <String>{});
+  }
+
+  @override
   Future<List<Lega>> findPubbliche() async {
     return _leghe.values
         .where((lega) => lega.privacy == PrivacyLega.pubblica)

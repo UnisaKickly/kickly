@@ -2,7 +2,7 @@
 // (§3.4.4.1.2): realizza UC_LEG_1 passi 1-4 (RF_LEG_1), cioe' validazione,
 // controllo dei nomi duplicati, registrazione della lega e nomina
 // dell'Amministratore, ed e' esteso alla modifica dei dettagli della lega
-// (RF_LEG_1).
+// (RF_LEG_1) e alla gestione di membri e amministratori (RF_LEG_3).
 //
 // Per questo flusso non c'e' un sequence diagram; l'ordine delle chiamate e':
 // FormLega -> GestioneLegaControl.creaLega() -> LegaRepository.existsByNome()
@@ -16,6 +16,14 @@
 // Elenco (VistaLeghe, KCK-249): VistaLeghe ->
 // GestioneLegaControl.visualizzaLeghe() -> LegaRepository.findByGiocatore()
 // -> LegaRepository.isAmministratore() per ogni lega.
+// Gestione membri (RF_LEG_3, KCK-222), dalla DashboardLega:
+// lista: visualizzaMembri() -> findById() -> findMembri() ->
+// isAmministratore() per ogni membro;
+// promozione: promuoviAdAmministratore() -> findById() -> isAmministratore()
+// -> findMembri() -> isAmministratore() del membro -> promuoviAdAdmin();
+// rimozione: rimuoviMembro() -> findById() -> isAmministratore() ->
+// findMembri() -> isAmministratore() di ogni membro (conteggio degli
+// amministratori) -> LegaRepository.rimuoviMembro().
 // La validazione dei dati sta qui, non nella GUI ne' nel repository (ticket
 // KCK-242). Nessun import di Flutter o di SDK esterni (DG9).
 import 'dart:math';
@@ -109,7 +117,51 @@ class CondivisioneInvitoNonPermessaException extends AppException {
       );
 }
 
-/// Gestisce creazione e modifica di una lega (UC_LEG_1 passi 1-4, RF_LEG_1).
+/// Gestione dei membri chiesta da chi non e' amministratore (D13, RF_LEG_3).
+///
+/// La GUI non mostra i comandi di promozione e rimozione al membro ordinario;
+/// questo errore copre una richiesta arrivata comunque (TF_LEG_23).
+class GestioneMembriNonPermessaException extends AppException {
+  /// Crea l'errore con il messaggio per l'utente.
+  ///
+  /// [messaggio] sostituisce quello predefinito quando a chiedere la lista dei
+  /// membri e' chi non e' nemmeno membro della lega.
+  GestioneMembriNonPermessaException({String? messaggio})
+    : super(
+        message:
+            messaggio ??
+            'Solo un amministratore puo\' gestire i membri della lega',
+        code: 'gestione_membri_non_permessa',
+      );
+}
+
+/// Rimozione dell'unico amministratore della lega (D17, TF_LEG_22).
+///
+/// Il class diagram chiede almeno un amministratore per lega (1..*): prima
+/// di uscire l'amministratore deve nominarne un altro.
+class UnicoAmministratoreException extends AppException {
+  /// Crea l'errore con il messaggio deciso in D17.
+  UnicoAmministratoreException({super.originalError, super.stackTrace})
+    : super(
+        message: 'Nomina un altro amministratore prima di uscire',
+        code: 'unico_amministratore',
+      );
+}
+
+/// Il Giocatore su cui agire non e' membro della lega (RF_LEG_3).
+///
+/// Si puo' promuovere o rimuovere solo chi e' nella lista dei membri.
+class MembroNonTrovatoException extends AppException {
+  /// Crea l'errore con il messaggio per l'utente.
+  MembroNonTrovatoException()
+    : super(
+        message: 'Il giocatore non e\' membro della lega',
+        code: 'membro_non_trovato',
+      );
+}
+
+/// Gestisce creazione, modifica e membri di una lega (UC_LEG_1 passi 1-4,
+/// RF_LEG_1, RF_LEG_3).
 ///
 /// Legge e scrive i dati solo tramite LegaRepository. L'id del Giocatore lo
 /// passa la GUI: nel component diagram dell'SDD il Control delle leghe non
@@ -149,6 +201,10 @@ class GestioneLegaControl {
 
   /// Codice PostgreSQL di violazione di unicita' (nome o codice duplicato).
   static const _codiceDuplicato = '23505';
+
+  /// Codice PostgreSQL con cui il trigger di integrita' rifiuta la rimozione
+  /// dell'ultimo amministratore (migration A).
+  static const _codiceUltimoAmministratore = '23514';
 
   final LegaRepository _legaRepository;
   final DateTime Function() _orologio;
@@ -370,6 +426,136 @@ class GestioneLegaControl {
     return [
       for (var i = 0; i < leghe.length; i++)
         (lega: leghe[i], amministratore: ruoli[i]),
+    ];
+  }
+
+  /// Restituisce i membri della lega, ciascuno con il suo ruolo (RF_LEG_3).
+  ///
+  /// La lista la vede ogni membro della lega, perche' anche la DashboardLega
+  /// dei membri mostra i partecipanti (RF_LEG_4, mock-up UI_LEG_3); chi non e'
+  /// membro non vede la lega (D17) e riceve [GestioneMembriNonPermessaException].
+  /// [amministratore] serve alla GUI per il badge ADMIN e per mostrare i
+  /// comandi riservati solo agli amministratori (D13).
+  /// Lancia [LegaNonTrovataException] se la lega non esiste.
+  Future<List<({String idGiocatore, bool amministratore})>> visualizzaMembri({
+    required String idLega,
+    required String idGiocatore,
+  }) async {
+    await _trovaLega(idLega);
+    final List<String> membri = await _legaRepository.findMembri(idLega);
+    if (!membri.contains(idGiocatore)) {
+      throw GestioneMembriNonPermessaException(
+        messaggio: 'Solo i membri della lega ne vedono la lista dei membri',
+      );
+    }
+    return _conRuolo(idLega, membri);
+  }
+
+  /// Promuove un membro della lega ad amministratore (RF_LEG_3, TF_LEG_20).
+  ///
+  /// [idMembro] e' il Giocatore da promuovere, [idGiocatore] chi esegue
+  /// l'operazione. Il membro resta tra i membri. Promuovere chi e' gia'
+  /// amministratore non cambia nulla e non e' un errore.
+  /// Lancia [LegaNonTrovataException], [GestioneMembriNonPermessaException]
+  /// (chi esegue non e' amministratore, D13) o [MembroNonTrovatoException].
+  Future<void> promuoviAdAmministratore({
+    required String idLega,
+    required String idMembro,
+    required String idGiocatore,
+  }) async {
+    await _verificaAmministratore(idLega, idGiocatore);
+    await _verificaMembro(idLega, idMembro);
+    if (await _legaRepository.isAmministratore(idLega, idMembro)) {
+      return;
+    }
+    await _legaRepository.promuoviAdAdmin(idLega, idMembro);
+  }
+
+  /// Rimuove un membro dalla lega, togliendo anche il suo eventuale ruolo di
+  /// amministratore (RF_LEG_3, TF_LEG_21).
+  ///
+  /// L'amministratore puo' rimuovere anche un altro amministratore o se
+  /// stesso, ma non se e' l'unico: la lega deve avere almeno un
+  /// amministratore (class diagram 1..*, D17, TF_LEG_22).
+  /// Lancia [LegaNonTrovataException], [GestioneMembriNonPermessaException]
+  /// (D13), [MembroNonTrovatoException] o [UnicoAmministratoreException].
+  Future<void> rimuoviMembro({
+    required String idLega,
+    required String idMembro,
+    required String idGiocatore,
+  }) async {
+    await _verificaAmministratore(idLega, idGiocatore);
+    final List<String> membri = await _verificaMembro(idLega, idMembro);
+
+    final ruoli = await _conRuolo(idLega, membri);
+    final int amministratori = ruoli.where((m) => m.amministratore).length;
+    final bool membroAmministratore = ruoli.any(
+      (m) => m.idGiocatore == idMembro && m.amministratore,
+    );
+    if (membroAmministratore && amministratori <= 1) {
+      throw UnicoAmministratoreException();
+    }
+
+    try {
+      await _legaRepository.rimuoviMembro(idLega, idMembro);
+    } on AppException catch (error, stackTrace) {
+      // Un altro amministratore e' uscito nel frattempo: il trigger del
+      // database blocca la rimozione dell'ultimo amministratore (23514).
+      if (error.code == _codiceUltimoAmministratore) {
+        throw UnicoAmministratoreException(
+          originalError: error,
+          stackTrace: stackTrace,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Restituisce la lega o lancia [LegaNonTrovataException].
+  Future<Lega> _trovaLega(String idLega) async {
+    final Lega? lega = await _legaRepository.findById(idLega);
+    if (lega == null) {
+      throw LegaNonTrovataException();
+    }
+    return lega;
+  }
+
+  /// Controlla che la lega esista e che [idGiocatore] la amministri (D13).
+  ///
+  /// Si fa prima di ogni altro controllo, cosi' un membro ordinario non
+  /// scopre nulla sugli altri membri e la lega resta invariata.
+  Future<void> _verificaAmministratore(
+    String idLega,
+    String idGiocatore,
+  ) async {
+    await _trovaLega(idLega);
+    if (!await _legaRepository.isAmministratore(idLega, idGiocatore)) {
+      throw GestioneMembriNonPermessaException();
+    }
+  }
+
+  /// Controlla che [idMembro] sia nella lista dei membri e la restituisce.
+  Future<List<String>> _verificaMembro(String idLega, String idMembro) async {
+    final List<String> membri = await _legaRepository.findMembri(idLega);
+    if (!membri.contains(idMembro)) {
+      throw MembroNonTrovatoException();
+    }
+    return membri;
+  }
+
+  /// Associa a ogni membro il suo ruolo nella lega.
+  Future<List<({String idGiocatore, bool amministratore})>> _conRuolo(
+    String idLega,
+    List<String> membri,
+  ) async {
+    final List<bool> ruoli = await Future.wait(
+      membri.map(
+        (String membro) => _legaRepository.isAmministratore(idLega, membro),
+      ),
+    );
+    return [
+      for (var i = 0; i < membri.length; i++)
+        (idGiocatore: membri[i], amministratore: ruoli[i]),
     ];
   }
 

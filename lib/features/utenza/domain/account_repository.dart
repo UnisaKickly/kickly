@@ -14,6 +14,19 @@ abstract interface class AccountRepository {
   /// Codice dell'AppException lanciata da [registra] quando l'email esiste gia'.
   static const codiceEmailGiaRegistrata = 'email_gia_registrata';
 
+  /// Codice dell'AppException lanciata da [registra] quando il servizio di
+  /// autenticazione rifiuta l'indirizzo email (formato o dominio non validi).
+  ///
+  /// Serve a mostrare un errore specifico (UC_ACC_1 E2) al posto del messaggio
+  /// generico sui permessi (KCK-277).
+  static const codiceEmailNonValida = 'email_non_valida';
+
+  /// Codice dell'AppException lanciata da [registra] quando il servizio di
+  /// autenticazione blocca temporaneamente le richieste (limite di invii).
+  ///
+  /// L'utente deve solo riprovare tra poco: non e' un problema di permessi.
+  static const codiceTroppeRichieste = 'troppe_richieste';
+
   /// Crea le credenziali Auth e restituisce l'id dell'account creato.
   ///
   /// Nome, cognome ed eta' vengono passati nei metadati perche' il trigger
