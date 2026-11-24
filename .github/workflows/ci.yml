@@ -396,12 +396,14 @@ jobs:
 
       # Un `deno test` per ogni funzione (come in AGENTS.md), saltando le
       # cartelle di codice condiviso che iniziano con "_" (es. `_shared`).
+      # `--permit-no-files` (e non `--permit-no-tests`, che Deno 2 non conosce)
+      # evita il fallimento per una funzione ancora senza file di test (KCK-273).
       - name: Test delle Edge Functions
         if: steps.cosa.outputs.deno == 'true'
         run: |
           for dir in supabase/functions/*/; do
             case "$(basename "$dir")" in _*) continue ;; esac
             echo "::group::deno test $dir"
-            deno test --permit-no-tests --allow-env --allow-net "$dir"
+            deno test --permit-no-files --allow-env --allow-net "$dir"
             echo "::endgroup::"
           done
