@@ -192,6 +192,7 @@ Questo documento raccoglie le decisioni prese dal team per coprire i punti non s
   * SD_UC_PAG_1: `Quota.leggiQuota()`, `Quota.registraVersamento()` → `QuotaRepository`; `Transazione.creaTransazione()` → `TransazioneRepository`.
 
   Il messaggio di creazione `create` diventa il metodo di inserimento del repository; quando nello stesso repository sarebbe ambiguo (AccountRepository crea sia Account sia Giocatore), il nome si propone nel piano del ticket e si fa approvare.
+* **Aggiornamento (24/11/2026, KCK-229):** la scrittura delle Transazioni non passa da `TransazioneRepository`, che resta di sola lettura: per DG1 e DG2 (SDD v1.4) e per la RLS di KCK-233 il client non puo' inserire ne' modificare `transazione`. `Transazione.creaTransazione()` di SD_UC_PAG_1 la realizza il server: la Edge Function dei pagamenti (KCK-225) e il webhook di Stripe (KCK-231), chiamati dal Control tramite `GatewayPagamenti` (D26, C21).
 * **Ticket coinvolti:** KCK-196, KCK-203, KCK-211 (repository); KCK-250, KCK-235, KCK-214 (Control che chiamano questi metodi); KCK-246, KCK-252 (entity)
 
 ---
