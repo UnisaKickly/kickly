@@ -23,6 +23,14 @@ abstract interface class LegaRepository {
   /// Restituisce le leghe di cui il giocatore è membro.
   Future<List<Lega>> findByGiocatore(String giocatoreId);
 
+  /// Restituisce gli id dei Giocatori membri della lega.
+  ///
+  /// E' l'inverso di [findByGiocatore]: serve a GestioneLegaControl per
+  /// mostrare la lista dei membri e per contare gli amministratori prima di
+  /// una rimozione (RF_LEG_3, KCK-222). Una lega senza membri o inesistente
+  /// restituisce una lista vuota.
+  Future<List<String>> findMembri(String legaId);
+
   /// Restituisce tutte le leghe pubbliche.
   Future<List<Lega>> findPubbliche();
 

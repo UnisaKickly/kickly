@@ -161,6 +161,21 @@ class SupabaseLegaRepository implements LegaRepository {
     });
   }
 
+  /// Legge gli id dei membri da `membro_lega`.
+  ///
+  /// La policy RLS `membro_lega_select_stessa_lega` restituisce le righe solo
+  /// a chi e' membro della lega; per gli altri la lista e' vuota.
+  @override
+  Future<List<String>> findMembri(String legaId) {
+    return _execute(() async {
+      final rows = await _client
+          .from('membro_lega')
+          .select('giocatore_id')
+          .eq('lega_id', legaId);
+      return rows.map<String>((row) => row['giocatore_id'] as String).toList();
+    });
+  }
+
   @override
   Future<List<Lega>> findPubbliche() {
     return _execute(() async {
