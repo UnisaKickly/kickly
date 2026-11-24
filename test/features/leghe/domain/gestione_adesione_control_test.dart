@@ -17,11 +17,8 @@ void main() {
   late GestioneAdesioneControl control;
 
   setUp(() {
-    repository = InMemoryLegaRepository();
-    control = GestioneAdesioneControl(
-      legaRepository: repository,
-      orologio: () => adesso,
-    );
+    repository = InMemoryLegaRepository(orologio: () => adesso);
+    control = GestioneAdesioneControl(legaRepository: repository);
   });
 
   /// Crea una lega fittizia con un codice valido e scadenza controllata.
