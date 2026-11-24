@@ -212,3 +212,25 @@ Deno.test("N_richieste_con_M_posti_non_superano_mai_M_confermati", async () => {
   assert.equal(ambiente.posti - ambiente.confermati.size, 0);
   assert.equal(ambiente.stato, "Completa");
 });
+
+// Il controllo preliminare CORS (OPTIONS) dell'app web deve ammettere gli header
+// che il client Supabase invia davvero (`apikey`, `x-client-info`): senza, il
+// browser blocca ogni RSVP prima che arrivi alla funzione.
+Deno.test("cors_preflight_ammette_apikey_e_x_client_info", async () => {
+  const ambiente = creaAmbiente(4);
+  const response = await gestisciRichiestaRsvp(
+    new Request("https://funzione.example/rsvp", { method: "OPTIONS" }),
+    ambiente.dipendenze,
+  );
+  assert.equal(response.status, 204);
+  const consentiti = String(
+    response.headers.get("Access-Control-Allow-Headers"),
+  ).toLowerCase();
+  for (const intestazione of ["authorization", "apikey", "x-client-info", "content-type"]) {
+    assert.ok(consentiti.includes(intestazione), `manca ${intestazione}`);
+  }
+  assert.equal(
+    response.headers.get("Access-Control-Allow-Origin"),
+    "https://unisakickly.github.io",
+  );
+});
