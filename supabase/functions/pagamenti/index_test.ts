@@ -17,7 +17,8 @@ import {
 const GIOCATORE = "giocatore-1";
 const ALTRO_GIOCATORE = "giocatore-2";
 const GESTORE = "gestore-1";
-const QUOTA = "quota-1";
+/** uuid fittizio: crea_pagamento accetta solo quota_id in formato uuid. */
+const QUOTA = "00000000-0000-4000-8000-000000000001";
 const PARTITA = "partita-1";
 const CHIAVE_TEST = "sk_test_finta";
 
@@ -190,8 +191,9 @@ function creaAmbiente(opzioni: {
     adesso: () => ambiente.orologio.adesso,
     leggiUtente: (token) =>
       Promise.resolve(token.startsWith("jwt-") ? token.slice(4) : null),
+    // Come PostgreSQL, l'uuid si confronta senza badare alle maiuscole.
     leggiQuota: (id) =>
-      Promise.resolve(quota && quota.id === id ? quota : null),
+      Promise.resolve(quota && quota.id === id.toLowerCase() ? quota : null),
     leggiPagamentiQuota: (id) =>
       Promise.resolve(
         ambiente.transazioni
@@ -297,9 +299,10 @@ Deno.test("importo_in_centesimi_calcolato_dal_server_ignora_importo_del_client",
 Deno.test("importo_della_quota_non_numerico_rifiutato_senza_chiamare_stripe", async () => {
   const ambiente = creaAmbiente({ quota: { importo: "non-un-numero" } });
 
-  const { stato } = await chiama(ambiente, PAGA);
+  const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 500);
+  assert.equal(json.codice, "errore_interno");
   assert.equal(ambiente.richiesteStripe.length, 0);
   assert.equal(ambiente.transazioni.length, 0);
 });
@@ -319,6 +322,7 @@ Deno.test("stessa_chiave_di_idempotenza_per_due_richieste_nella_stessa_finestra"
   const seconda = await chiama(ambiente, PAGA);
 
   assert.equal(prima.stato, 500);
+  assert.equal(prima.json.codice, "errore_interno");
   assert.equal(seconda.stato, 200);
   const chiavi = sessioniCreate(ambiente).map((r) => r.idempotenza);
   const attesa = `pagamento_${QUOTA}_0_${FINESTRA}`;
@@ -342,7 +346,12 @@ Deno.test("chiave_diversa_dopo_errore_stripe_500_nella_finestra_successiva", asy
   const finestraSuccessiva = await chiama(ambiente, PAGA);
 
   assert.equal(prima.stato, 502);
+  assert.equal(prima.json.codice, "servizio_pagamento_non_disponibile");
   assert.equal(stessaFinestra.stato, 502);
+  assert.equal(
+    stessaFinestra.json.codice,
+    "servizio_pagamento_non_disponibile",
+  );
   assert.equal(finestraSuccessiva.stato, 200);
   assert.equal(
     finestraSuccessiva.json.url,
@@ -395,9 +404,10 @@ Deno.test("rete_interrotta_fetch_lancia_eccezione_gestita", async () => {
   const ambiente = creaAmbiente();
   ambiente.guasti.set("POST /checkout/sessions", "rete");
 
-  const { stato } = await chiama(ambiente, PAGA);
+  const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 502);
+  assert.equal(json.codice, "servizio_pagamento_non_disponibile");
   assert.equal(ambiente.transazioni.length, 0);
 });
 
@@ -575,9 +585,10 @@ Deno.test("errore_stripe_sulla_lettura_della_sessione_esistente_gestito", async 
   const prima = structuredClone(ambiente.transazioni);
   ambiente.guasti.set("GET /checkout/sessions/:id", { stato: 500 });
 
-  const { stato } = await chiama(ambiente, PAGA);
+  const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 502);
+  assert.equal(json.codice, "servizio_pagamento_non_disponibile");
   assert.equal(sessioniCreate(ambiente).length, 1);
   assert.deepEqual(ambiente.transazioni, prima);
 });
@@ -619,7 +630,9 @@ Deno.test("sessione_404_con_altro_codice_resta_errore_502", async () => {
   const { stato, json } = await chiama(ambiente, PAGA);
 
   assert.equal(stato, 502);
+  assert.equal(json.codice, "servizio_pagamento_non_disponibile");
   assert.ok(!JSON.stringify(json).includes("guasto"));
+  assert.ok(!JSON.stringify(json).includes("altro_codice"));
   assert.equal(sessioniCreate(ambiente).length, 1);
   assert.deepEqual(ambiente.transazioni, prima);
 });
@@ -783,6 +796,7 @@ Deno.test("onboarding_stessa_chiave_di_idempotenza_nella_stessa_finestra", async
   const seconda = await chiama(ambiente, ONBOARDING, GESTORE);
 
   assert.equal(prima.stato, 500);
+  assert.equal(prima.json.codice, "errore_interno");
   assert.equal(seconda.stato, 200);
   const creazioni = ambiente.richiesteStripe.filter((r) =>
     r.percorso === "/accounts"
@@ -804,7 +818,12 @@ Deno.test("onboarding_chiave_diversa_dopo_errore_500_nella_finestra_successiva",
   const finestraSuccessiva = await chiama(ambiente, ONBOARDING, GESTORE);
 
   assert.equal(prima.stato, 502);
+  assert.equal(prima.json.codice, "servizio_pagamento_non_disponibile");
   assert.equal(stessaFinestra.stato, 502);
+  assert.equal(
+    stessaFinestra.json.codice,
+    "servizio_pagamento_non_disponibile",
+  );
   assert.equal(finestraSuccessiva.stato, 200);
   assert.deepEqual(
     ambiente.richiesteStripe
@@ -840,9 +859,10 @@ Deno.test("onboarding_link_fallito_id_account_gia_salvato", async () => {
   const ambiente = creaAmbiente({ gestori: [[GESTORE, null]] });
   ambiente.guasti.set("POST /account_links", { stato: 500 });
 
-  const { stato } = await chiama(ambiente, ONBOARDING, GESTORE);
+  const { stato, json } = await chiama(ambiente, ONBOARDING, GESTORE);
 
   assert.equal(stato, 502);
+  assert.equal(json.codice, "servizio_pagamento_non_disponibile");
   assert.equal(ambiente.gestori.get(GESTORE), "acct_test_1");
 
   // Al nuovo tentativo l'account si riusa, senza crearne un secondo.
@@ -1006,4 +1026,136 @@ Deno.test("conflitto_23505_con_sessione_scaduta_codice_pagamento_in_corso", asyn
 
   assert.equal(stato, 409);
   assert.equal(json.codice, "pagamento_in_corso");
+});
+
+// --- Seconda revisione: ordine dei controlli (D8, TF_PAG_07) e input ---
+
+Deno.test("quota_versata_con_partita_confermata_codice_quota_gia_versata", async () => {
+  const ambiente = creaAmbiente({
+    quota: { statoVersamento: "versata", statoPartita: "Confermata" },
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "quota_gia_versata");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("quota_rimborsata_con_partita_annullata_codice_quota_rimborsata", async () => {
+  const ambiente = creaAmbiente({
+    quota: { statoVersamento: "rimborsata", statoPartita: "Annullata" },
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "quota_rimborsata");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("quota_rimborsata_con_partecipazione_ritirata_codice_quota_rimborsata", async () => {
+  const ambiente = creaAmbiente({
+    quota: { statoVersamento: "rimborsata", rispostaStato: "ritirata" },
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "quota_rimborsata");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("quota_id_in_maiuscolo_stessa_chiave_e_una_sola_sessione", async () => {
+  const ambiente = creaAmbiente();
+  // Prima richiesta con l'uuid in maiuscolo: Stripe crea la sessione ma il
+  // salvataggio della Transazione fallisce. La seconda, in minuscolo, arriva di
+  // nuovo a Stripe: chiave, metadata e transazione usano l'id letto dal DB,
+  // quindi la chiave e' la stessa e la sessione una sola.
+  const creaVera = ambiente.dipendenze.creaTransazione;
+  ambiente.dipendenze.creaTransazione = () =>
+    Promise.reject(new Error("DB non raggiungibile"));
+  const maiuscolo = await chiama(ambiente, {
+    azione: "crea_pagamento",
+    quota_id: QUOTA.toUpperCase(),
+  });
+  ambiente.dipendenze.creaTransazione = creaVera;
+  const minuscolo = await chiama(ambiente, PAGA);
+
+  assert.equal(maiuscolo.stato, 500);
+  assert.equal(maiuscolo.json.codice, "errore_interno");
+  assert.equal(minuscolo.stato, 200);
+  const richieste = sessioniCreate(ambiente);
+  const attesa = `pagamento_${QUOTA}_0_${FINESTRA}`;
+  assert.deepEqual(richieste.map((r) => r.idempotenza), [attesa, attesa]);
+  assert.equal(richieste[0].parametri.get("metadata[quota_id]"), QUOTA);
+  assert.equal(ambiente.sessioni.size, 1);
+  assert.equal(ambiente.transazioni.length, 1);
+  assert.equal(ambiente.transazioni[0].quotaId, QUOTA);
+});
+
+Deno.test("quota_id_non_uuid_codice_richiesta_non_valida_senza_leggere_il_db", async () => {
+  const ambiente = creaAmbiente();
+  let lettureQuota = 0;
+  ambiente.dipendenze.leggiQuota = () => {
+    lettureQuota += 1;
+    return Promise.resolve(null);
+  };
+
+  for (const quota_id of ["quota-1", "", 42, "' OR 1=1 --"]) {
+    const { stato, json } = await chiama(ambiente, {
+      azione: "crea_pagamento",
+      quota_id,
+    });
+
+    assert.equal(stato, 400, String(quota_id));
+    assert.equal(json.codice, "richiesta_non_valida", String(quota_id));
+  }
+  assert.equal(lettureQuota, 0);
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("corpo_array_codice_richiesta_non_valida", async () => {
+  const ambiente = creaAmbiente();
+
+  const { stato, json } = await chiamaGrezzo(
+    ambiente,
+    "POST",
+    JSON.stringify([PAGA]),
+  );
+
+  assert.equal(stato, 400);
+  assert.equal(json.codice, "richiesta_non_valida");
+  assert.equal(ambiente.richiesteStripe.length, 0);
+});
+
+Deno.test("conflitto_23505_con_sessione_non_trovata_codice_pagamento_in_corso", async () => {
+  const ambiente = creaAmbiente();
+  // La transazione dell'altra richiesta punta a una sessione che Stripe non
+  // trova: GET risponde 404 resource_missing.
+  simulaConflitto(ambiente, {
+    stato: "in_attesa",
+    riferimentoEsterno: "cs_test_sconosciuta",
+  });
+
+  const { stato, json } = await chiama(ambiente, PAGA);
+
+  assert.equal(stato, 409);
+  assert.equal(json.codice, "pagamento_in_corso");
+});
+
+Deno.test("url_di_configurazione_assente_o_non_valido_codice_configurazione_non_valida", async () => {
+  const senzaUrl = { ...ENV_VALIDO };
+  delete senzaUrl.STRIPE_ACCOUNT_REFRESH_URL;
+  const urlNonValido = { ...ENV_VALIDO, STRIPE_CANCEL_URL: "non un url" };
+
+  for (const env of [senzaUrl, urlNonValido]) {
+    const ambiente = creaAmbiente({ env });
+
+    const { stato, json } = await chiama(ambiente, PAGA);
+
+    assert.equal(stato, 500);
+    assert.equal(json.codice, "configurazione_non_valida");
+    assert.equal(ambiente.richiesteStripe.length, 0);
+  }
 });

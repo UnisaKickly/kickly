@@ -23,6 +23,10 @@ import {
   type SessioneCheckout,
 } from "./stripe_api.ts";
 
+/** Formato di un uuid (id delle tabelle), maiuscole o minuscole. */
+const FORMATO_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Configurazione letta dalle variabili d'ambiente. Nessun valore nel codice. */
 export interface Configurazione {
   chiaveSegretaStripe: string;
@@ -109,9 +113,14 @@ export function leggiConfigurazione(
   ) {
     return null;
   }
+  // Tutti e quattro gli URL devono essere validi: uno sbagliato lo scoprirebbe
+  // Stripe solo durante il pagamento o l'onboarding.
   let origineConsentita: string;
   try {
     origineConsentita = new URL(urlSuccesso).origin;
+    new URL(urlAnnullamento);
+    new URL(urlRitornoAccount);
+    new URL(urlAggiornamentoAccount);
   } catch {
     return null;
   }
@@ -184,7 +193,9 @@ export async function gestisciRichiesta(
     let corpo: Record<string, unknown>;
     try {
       const json = await req.json();
-      if (typeof json !== "object" || json === null) throw new Error();
+      if (typeof json !== "object" || json === null || Array.isArray(json)) {
+        throw new Error();
+      }
       corpo = json as Record<string, unknown>;
     } catch {
       return rispondiErrore(
@@ -199,7 +210,11 @@ export async function gestisciRichiesta(
       case "onboarding_gestore":
         return await onboardingGestore(accountId, configurazione, dipendenze);
       case "crea_pagamento":
-        if (typeof corpo.quota_id !== "string" || corpo.quota_id === "") {
+        // quota_id deve essere un uuid: altrimenti si risponde senza leggere il DB.
+        if (
+          typeof corpo.quota_id !== "string" ||
+          !FORMATO_UUID.test(corpo.quota_id)
+        ) {
           return rispondiErrore(
             400,
             "richiesta_non_valida",
@@ -301,8 +316,9 @@ async function onboardingGestore(
  * Azione `crea_pagamento` (RF_PAG_1, UC_PAG_1, D25, D27).
  *
  * Ordine delle chiamate:
- * 1. leggiQuota(): verifica le entry condition di UC_PAG_1 (Quota del chiamante,
- *    iscritto, partita Completa, Quota da_versare, termine non scaduto);
+ * 1. leggiQuota(): verifica le entry condition di UC_PAG_1 nell'ordine Quota del
+ *    chiamante, Quota da_versare, iscritto, partita Completa, termine non
+ *    scaduto; da qui in poi si usa quota.id letto dal DB;
  * 2. leggiPagamentiQuota(): se c'e' un pagamento completata si risponde
  *    "pagamento in verifica" senza chiamare Stripe; se ce n'e' uno in_attesa si guarda la
  *    sessione su Stripe (open: stesso URL; complete: si attende il webhook di
@@ -315,16 +331,20 @@ async function onboardingGestore(
  */
 async function creaPagamento(
   accountId: string,
-  quotaId: string,
+  quotaIdRichiesta: string,
   configurazione: Configurazione,
   dipendenze: Dipendenze,
 ): Promise<Response> {
   const origine = configurazione.origineConsentita;
   const chiave = configurazione.chiaveSegretaStripe;
 
-  // 1. Entry condition di UC_PAG_1. Una Quota di un altro Giocatore risponde come
-  //    una Quota inesistente, per non rivelarne l'esistenza.
-  const quota = await dipendenze.leggiQuota(quotaId);
+  // 1. Entry condition di UC_PAG_1, in quest'ordine: Quota del chiamante, stato
+  //    del versamento, iscrizione, stato della partita, termine. Lo stato del
+  //    versamento viene prima della partita perche' D8 vuole "Quota gia' versata"
+  //    per una Quota versata qualunque sia lo stato della partita (TF_PAG_07).
+  //    Una Quota di un altro Giocatore risponde come una Quota inesistente, per
+  //    non rivelarne l'esistenza.
+  const quota = await dipendenze.leggiQuota(quotaIdRichiesta);
   if (quota === null || quota.giocatoreId !== accountId) {
     return rispondiErrore(
       404,
@@ -333,22 +353,9 @@ async function creaPagamento(
       origine,
     );
   }
-  if (quota.rispostaStato !== "confermata") {
-    return rispondiErrore(
-      409,
-      "non_iscritto",
-      "non risulti iscritto alla partita",
-      origine,
-    );
-  }
-  if (quota.statoPartita !== "Completa") {
-    return rispondiErrore(
-      409,
-      "partita_non_completa",
-      "la partita non e' nello stato Completa",
-      origine,
-    );
-  }
+  // Da qui si usa l'id letto dal DB, non quello del corpo: lo stesso uuid scritto
+  // in maiuscolo darebbe un'altra chiave di idempotenza e un'altra sessione.
+  const quotaId = quota.id;
   // versata e rimborsata hanno codici distinti: una Quota rimborsata non e'
   // "gia' versata". Ogni altro valore e' escluso dal CHECK del DB (D25), quindi
   // e' un guasto del server e diventa errore_interno.
@@ -370,6 +377,22 @@ async function creaPagamento(
   }
   if (quota.statoVersamento !== "da_versare") {
     throw new Error("stato_versamento non ammesso");
+  }
+  if (quota.rispostaStato !== "confermata") {
+    return rispondiErrore(
+      409,
+      "non_iscritto",
+      "non risulti iscritto alla partita",
+      origine,
+    );
+  }
+  if (quota.statoPartita !== "Completa") {
+    return rispondiErrore(
+      409,
+      "partita_non_completa",
+      "la partita non e' nello stato Completa",
+      origine,
+    );
   }
   const termine = new Date(quota.termineVersamento).getTime();
   if (Number.isNaN(termine)) {
@@ -459,14 +482,16 @@ async function creaPagamento(
     if (registrata === undefined) {
       return rispostaPagamentoInCorso(origine);
     }
+    // Sessione scaduta o che Stripe non trova (404 resource_missing): l'altra
+    // richiesta non ha un URL valido da restituire, si puo' riprovare.
     const esistente = registrata.riferimentoEsterno === sessione.id
       ? sessione
-      : await leggiSessioneCheckout(
-        dipendenze.fetch,
+      : await leggiSessioneSeEsiste(
+        dipendenze,
         chiave,
         registrata.riferimentoEsterno,
       );
-    if (esistente.status === "expired") {
+    if (esistente === null || esistente.status === "expired") {
       return rispostaPagamentoInCorso(origine);
     }
     return rispostaSessioneEsistente(esistente, origine);
