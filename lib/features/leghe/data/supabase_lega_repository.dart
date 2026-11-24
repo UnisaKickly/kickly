@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/persistence/supabase_client_provider.dart';
+import '../domain/gestione_adesione_control.dart';
 import '../domain/lega.dart';
 import '../domain/lega_repository.dart';
 
@@ -129,6 +130,49 @@ class SupabaseLegaRepository implements LegaRepository {
           .eq('codice_invito', codiceInvito)
           .maybeSingle();
       return row == null ? null : Lega.fromJson(row);
+    });
+  }
+
+  /// Aderisce alla lega tramite la RPC, che usa l'identità autenticata lato DB.
+  ///
+  /// Traduce gli errori specifici dell'invito nelle eccezioni di dominio,
+  /// mantenendo la traduzione condivisa per gli altri errori PostgREST.
+  @override
+  Future<Lega> uniscitiConCodice(String codiceInvito, String giocatoreId) {
+    return _execute(() async {
+      try {
+        final response = await _client.rpc(
+          'unisciti_lega_con_codice',
+          params: {'p_codice_invito': codiceInvito},
+        );
+        if (response is Map<String, dynamic>) {
+          return Lega.fromJson(response);
+        }
+        if (response is List &&
+            response.isNotEmpty &&
+            response.first is Map<String, dynamic>) {
+          return Lega.fromJson(response.first as Map<String, dynamic>);
+        }
+        throw const FormatException(
+          'Risposta RPC unisciti_lega_con_codice non valida',
+        );
+      } on PostgrestException catch (error, stackTrace) {
+        switch (error.code) {
+          case 'KCK01':
+            throw CodiceInvitoNonValidoException();
+          case 'KCK02':
+            throw CodiceInvitoScadutoException();
+          case 'KCK03':
+            throw GiocatoreGiaMembroException();
+          case '28000':
+            throw AppException.permission(
+              originalError: error,
+              stackTrace: stackTrace,
+            );
+          default:
+            throw translateSupabaseError(error, stackTrace: stackTrace);
+        }
+      }
     });
   }
 

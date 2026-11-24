@@ -17,6 +17,12 @@ abstract interface class LegaRepository {
   /// Cerca una lega tramite il codice invito già generato dal Control.
   Future<Lega?> findByCodiceInvito(String codiceInvito);
 
+  /// Aggiunge il Giocatore alla lega identificata da un codice invito valido.
+  ///
+  /// [giocatoreId] identifica chi aderisce nelle implementazioni senza
+  /// sessione; Supabase ricava l'identità dalla sessione autenticata.
+  Future<Lega> uniscitiConCodice(String codiceInvito, String giocatoreId);
+
   /// Verifica l'unicità normalizzata del nome della lega.
   Future<bool> existsByNome(String nome);
 
