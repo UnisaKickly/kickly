@@ -104,6 +104,30 @@ class GestioneLegaControlFinto implements GestioneLegaControl {
     );
   }
 
+  /// Restituisce il codice d'invito fittizio richiesto dai widget test.
+  ///
+  /// Fornisce la risposta minima necessaria ai test senza creare repository
+  /// o accedere al database.
+  @override
+  Future<String> generaCodiceInvito({
+    required String idLega,
+    required String idGiocatore,
+  }) async {
+    return 'KCK78X9P';
+  }
+
+  /// Restituisce il link d'invito fittizio richiesto dai widget test.
+  ///
+  /// Mantiene separata la risposta del fake dall'orchestrazione reale del
+  /// codice invito e non introduce logica o dipendenze esterne.
+  @override
+  Future<String> generaLinkInvito({
+    required String idLega,
+    required String idGiocatore,
+  }) async {
+    return 'https://unisakickly.github.io/kickly/#/lega/invito/KCK78X9P';
+  }
+
   @override
   Future<List<({Lega lega, bool amministratore})>> visualizzaLeghe(
     String idGiocatore,
