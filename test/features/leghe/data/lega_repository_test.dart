@@ -198,6 +198,36 @@ void main() {
     expect(await repository.isAmministratore('lega-assente', 'x'), isFalse);
   });
 
+  test('findMembri restituisce i membri della lega', () async {
+    final repository = InMemoryLegaRepository();
+    final created = await repository.createLega(lega(), 'g1');
+    await repository.aggiungiMembro(created.id, 'g2');
+
+    expect(await repository.findMembri(created.id), ['g1', 'g2']);
+    expect(await repository.findMembri('lega-assente'), isEmpty);
+  });
+
+  test('Supabase findMembri legge membro_lega', () async {
+    var path = '';
+    var query = '';
+    final result = await _withLegaSupabase(
+      (repository) => repository.findMembri('lega-1'),
+      (request) async {
+        path = request.uri.path;
+        query = request.uri.query;
+        await _RestServer().respond(request, 200, [
+          {'giocatore_id': 'giocatore-1'},
+          {'giocatore_id': 'giocatore-2'},
+        ]);
+      },
+    );
+
+    expect(path, '/rest/v1/membro_lega');
+    expect(query, contains('lega_id=eq.lega-1'));
+    expect(query, contains('select=giocatore_id'));
+    expect(result, ['giocatore-1', 'giocatore-2']);
+  });
+
   test('Supabase isAmministratore legge amministratore_lega', () async {
     var path = '';
     var query = '';

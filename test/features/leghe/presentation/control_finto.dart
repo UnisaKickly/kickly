@@ -137,6 +137,28 @@ class GestioneLegaControlFinto implements GestioneLegaControl {
     if (erroreElenco != null) throw erroreElenco!;
     return leghe;
   }
+
+  // Gestione membri (RF_LEG_3, KCK-222): le schermate di KCK-249 non la
+  // usano; le risposte vere arriveranno con la GUI di KCK-228.
+  @override
+  Future<List<({String idGiocatore, bool amministratore})>> visualizzaMembri({
+    required String idLega,
+    required String idGiocatore,
+  }) async => [];
+
+  @override
+  Future<void> promuoviAdAmministratore({
+    required String idLega,
+    required String idMembro,
+    required String idGiocatore,
+  }) async {}
+
+  @override
+  Future<void> rimuoviMembro({
+    required String idLega,
+    required String idMembro,
+    required String idGiocatore,
+  }) async {}
 }
 
 /// Avvia l'app autenticata sulla rotta [percorso] con il Control finto e
