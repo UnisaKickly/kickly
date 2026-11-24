@@ -402,6 +402,6 @@ jobs:
           for dir in supabase/functions/*/; do
             case "$(basename "$dir")" in _*) continue ;; esac
             echo "::group::deno test $dir"
-            deno test --permit-no-tests --allow-env --allow-net "$dir"
+            deno test --permit-no-files --allow-env --allow-net "$dir"
             echo "::endgroup::"
           done
