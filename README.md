@@ -112,6 +112,26 @@ Per scrivere una migration nuova:
 2. prova tutto in locale (serve Docker acceso): `supabase start`,
    `supabase db reset` (applica migration e seed) e `supabase test db` (test
    pgTAP);
+   per provare manualmente la concorrenza RSVP, apri due sessioni PostgreSQL
+   sul database locale e usa una partita di test con un solo posto libero.
+   Nella sessione A avvia una transazione e conferma un giocatore, lasciandola
+   aperta:
+
+   ```sql
+   BEGIN;
+   SELECT * FROM public.gestisci_rsvp('<partita_uuid>', '<giocatore_a_uuid>', 'conferma');
+   ```
+
+   Nella sessione B conferma un giocatore diverso per la stessa partita:
+
+   ```sql
+   SELECT * FROM public.gestisci_rsvp('<partita_uuid>', '<giocatore_b_uuid>', 'conferma');
+   ```
+
+   La chiamata B resta in attesa del lock. Esegui `COMMIT` nella sessione A e
+   verifica che B restituisca `partita_al_completo`; la partita deve risultare
+   `Completa`, con zero posti liberi e senza superare la capienza. Esegui la
+   prova solo su dati di test locali.
 3. se la PR resta aperta a lungo, controlla prima del merge che nessun'altra
    migration piu' recente sia entrata in `develop`: una migration con un
    timestamp **precedente** all'ultima gia' applicata viene rifiutata e il
