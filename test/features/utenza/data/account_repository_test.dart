@@ -708,6 +708,64 @@ void main() {
     );
   });
 
+  // KCK-277: un'email rifiutata da Auth (400 email_address_invalid) non deve
+  // diventare il messaggio generico sui permessi (UC_ACC_1 E2).
+  test('Supabase traduce email_address_invalid in email_non_valida', () async {
+    final risultato = await _withAccountSupabase<Object?>(
+      (repository) => repository
+          .registra(
+            'mario@example.com',
+            'PasswordFittizia1!',
+            'Mario',
+            'Rossi',
+            25,
+          )
+          .then<Object?>((_) => null, onError: (Object error) => error),
+      (request) => _RestServer().respond(request, 400, {
+        'code': 400,
+        'error_code': 'email_address_invalid',
+        'msg': 'Email address "mario@example.com" is invalid',
+      }),
+    );
+
+    expect(risultato, isA<AppException>());
+    expect(
+      (risultato as AppException).code,
+      AccountRepository.codiceEmailNonValida,
+      reason: '${risultato.originalError}',
+    );
+    expect(risultato.message, contains('Indirizzo email non valido'));
+  });
+
+  // KCK-277: il limite di invii di Auth (429) e' un "riprova tra poco", non un
+  // problema di permessi.
+  test('Supabase traduce il limite di richieste in troppe_richieste', () async {
+    final risultato = await _withAccountSupabase<Object?>(
+      (repository) => repository
+          .registra(
+            'mario@example.com',
+            'PasswordFittizia1!',
+            'Mario',
+            'Rossi',
+            25,
+          )
+          .then<Object?>((_) => null, onError: (Object error) => error),
+      (request) => _RestServer().respond(request, 429, {
+        'code': 429,
+        'error_code': 'over_email_send_rate_limit',
+        'msg': 'email rate limit exceeded',
+      }),
+    );
+
+    expect(risultato, isA<AppException>());
+    expect(
+      (risultato as AppException).code,
+      AccountRepository.codiceTroppeRichieste,
+      reason: '${risultato.originalError}',
+    );
+    expect(risultato.message, contains('Riprova tra qualche minuto'));
+  });
+
   test(
     'Supabase salva ruolo Giocatore con UPDATE seguito da INSERT puro',
     () async {

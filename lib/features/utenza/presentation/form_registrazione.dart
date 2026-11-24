@@ -205,7 +205,7 @@ class _FormRegistrazioneState extends State<FormRegistrazione> {
                           const Padding(
                             padding: EdgeInsets.only(top: 6),
                             child: Text(
-                              'Almeno 8 caratteri, una maiuscola e un numero.',
+                              'Almeno 8 caratteri, una lettera e un numero.',
                             ),
                           ),
                           const SizedBox(height: 12),
