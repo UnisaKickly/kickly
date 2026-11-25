@@ -5,10 +5,14 @@
 // rotte, feature) vive in `app.dart` o nei moduli sotto `lib/`, cosi' da
 // poterlo testare senza dover lanciare `main()`.
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
+import 'core/persistence/sessione_secure_storage.dart';
+import 'core/provider/autenticazione_provider.dart';
+import 'core/provider/registrazione_provider.dart';
 
 /// Messaggio mostrato quando l'app viene avviata senza `config.json`.
 const String messaggioConfigurazioneMancante =
@@ -37,9 +41,29 @@ Future<void> main() async {
   // Nota: da supabase_flutter 2.18 il parametro `anonKey` e' deprecato e si
   // chiama `publishableKey`; il valore e' lo stesso (la chiave anon /
   // publishable del dashboard), mai la chiave secret / service_role.
-  await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
+  // La sessione di login si salva nel Secure Storage del sistema operativo e
+  // non in SharedPreferences, che e' il default (SDD, deployment; KCK-208).
+  await Supabase.initialize(
+    url: supabaseUrl,
+    publishableKey: supabaseAnonKey,
+    authOptions: FlutterAuthClientOptions(
+      localStorage: SessioneSecureStorage(),
+    ),
+  );
 
-  runApp(const KicklyApp());
+  // Un solo ProviderContainer per tutta l'app: il router riceve la sessione e
+  // i Control di autenticazione e registrazione vengono creati dallo stesso
+  // container e passati alle rispettive Boundary.
+  final ProviderContainer container = ProviderContainer();
+  runApp(
+    UncontrolledProviderScope(
+      container: container,
+      child: KicklyApp(
+        sessioneProvider: container.read(sessioneAutenticazioneProvider),
+        registrazioneControl: container.read(registrazioneControlProvider),
+      ),
+    ),
+  );
 }
 
 /// App minimale mostrata quando manca la configurazione di Supabase.

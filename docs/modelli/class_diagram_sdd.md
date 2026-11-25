@@ -1,7 +1,7 @@
-# Kickly – Class diagram ristrutturato (SDD v1.0, sezione 4.2)
+# Kickly – Class diagram ristrutturato (SDD v1.4, sezione 4.2)
 
 Trascrizione testuale del class diagram ristrutturato dell'SDD
-(`docs/fonti/Kickly_SDD_v1.0.pdf`, §4.2). E' la specifica per migration,
+(`docs/fonti/Kickly_SDD_v1.4.pdf`, §4.2). E' la specifica per migration,
 entity Dart e repository finche' non c'e' `class.puml` (KCK-201), che dovra'
 coincidere con questo file. **Non si aggiungono classi, attributi o tipi:**
 se serve qualcosa che qui non c'e', si chiede ai PM.
@@ -74,13 +74,19 @@ a realizzare il diagramma su Supabase senza aggiungere elementi al modello.
    entrambe (molteplicita' 1..*).
 4. **`Prenotazione.intervallo`** resta String con un formato unico di slot
    (es. `2026-11-20T18:00/2026-11-20T19:00`) ricavato da
-   `Campo.orariDisponibilita`. Le sovrapposizioni si evitano con un vincolo
-   UNIQUE su (campo, intervallo) per le prenotazioni con `statoBlocco` attivo,
-   insieme a `scadenzaBlocco` per liberare gli slot non confermati.
+   `Campo.orariDisponibilita`. Le sovrapposizioni si evitano con un vincolo di
+   esclusione (`EXCLUDE USING gist`, estensione `btree_gist`) su (campo,
+   intervallo) per le prenotazioni con `statoBlocco` attivo (bloccato o
+   confermato): un UNIQUE fermerebbe solo gli intervalli identici, non quelli
+   sovrapposti (18:00/19:00 e 18:30/19:30). Resta `scadenzaBlocco` per liberare
+   gli slot non confermati.
 5. **`Campo.orariDisponibilita`** e' una colonna di Campo, non una tabella.
 6. **`VotazioneMVP.preferenzeVotanteVotato`** (mappa votante -> votato) e' una
    tabella (votazione, votante, votato) con UNIQUE (votazione, votante);
    `vincitore` e' una chiave esterna facoltativa verso Giocatore.
+   In Dart `preferenzeVotanteVotato` non e' un attributo dell'entity
+   VotazioneMVP: la tabella `preferenza_voto_mvp` la gestisce
+   VotazioneMVPRepository, come `membro_lega` e `amministratore_lega` per Lega.
 7. **Idempotenza dei pagamenti**: `Transazione.riferimentoEsterno` (id
    dell'evento del fornitore) e' UNIQUE. Nessuna colonna in piu'.
 8. **Chiavi esterne dalle molteplicita'**: lato "1" = NOT NULL, lato "0..1" =
@@ -88,3 +94,4 @@ a realizzare il diagramma su Supabase senza aggiungere elementi al modello.
    `partita.organizzatore` NOT NULL, `partita.lega` facoltativa,
    `quota.partecipazione` NOT NULL e UNIQUE, `votazione_mvp.partita` NOT NULL e
    UNIQUE, `partecipazione` UNIQUE (giocatore, partita).
+9. id e chiavi esterne sono attributi tecnici di mappatura, non del modello. Nel codice si chiamano `id` (chiave della classe) e `<entity>Id` (chiavi esterne), e corrispondono alle colonne `id` e `<entity>_id` del database (es. `accountId` ↔ `account_id`). Le sottoclassi di Account ereditano `id`; nel database la loro chiave è `account_id`.

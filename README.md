@@ -92,9 +92,79 @@ supabase login
 supabase link --project-ref zwnmtoygwwiajffufqqc
 ```
 
-Se `supabase link` chiede la password del database, chiedila a un PM. URL,
+Con la CLI 3.x `supabase link` di solito non chiede la password del database
+(usa l'accesso del tuo `supabase login`); se la chiede, chiedila a un PM. URL,
 chiavi e password si condividono solo su un canale privato (es. gestore di
 password del team): mai nel repo, nei commit, nelle PR o su Jira.
+
+### Migration sul database
+
+Le migration (`supabase/migrations/`) si applicano **da sole** al progetto
+Supabase `kickly` quando una PR che le tocca viene mergiata in `develop`
+(workflow `db-deploy.yml`, vedi "CI/CD e rilasci"). Non serve fare niente a mano.
+
+Per scrivere una migration nuova:
+
+1. parti da `develop` aggiornato e crea il file con
+   `supabase migration new <nome>`: il prefisso del nome e' la data e l'ora UTC
+   di adesso, quindi e' piu' recente di tutte quelle gia' presenti. Non
+   inventare il prefisso a mano;
+2. prova tutto in locale (serve Docker acceso): `supabase start`,
+   `supabase db reset` (applica migration e seed) e `supabase test db` (test
+   pgTAP);
+   per provare manualmente la concorrenza RSVP, apri due sessioni PostgreSQL
+   sul database locale e usa una partita di test con un solo posto libero.
+   Nella sessione A avvia una transazione e conferma un giocatore, lasciandola
+   aperta:
+
+   ```sql
+   BEGIN;
+   SELECT * FROM public.gestisci_rsvp('<partita_uuid>', '<giocatore_a_uuid>', 'conferma');
+   ```
+
+   Nella sessione B conferma un giocatore diverso per la stessa partita:
+
+   ```sql
+   SELECT * FROM public.gestisci_rsvp('<partita_uuid>', '<giocatore_b_uuid>', 'conferma');
+   ```
+
+   La chiamata B resta in attesa del lock. Esegui `COMMIT` nella sessione A e
+   verifica che B restituisca `partita_al_completo`; la partita deve risultare
+   `Completa`, con zero posti liberi e senza superare la capienza. Esegui la
+   prova solo su dati di test locali.
+3. se la PR resta aperta a lungo, controlla prima del merge che nessun'altra
+   migration piu' recente sia entrata in `develop`: una migration con un
+   timestamp **precedente** all'ultima gia' applicata viene rifiutata e il
+   deploy fallisce. In quel caso si rinomina il file con un timestamp nuovo
+   (con `supabase migration new`) prima di rifare il merge. La CI lo controlla
+   da sola sulle PR (passo "Controlla le regole sulle migration"): se e' rossa
+   per questo motivo, l'errore dice quale file correggere.
+
+Regole da non rompere:
+
+- **Mai modificare una migration gia' applicata**: se serve una correzione si
+  scrive una migration nuova. La CI fa fallire una PR che modifica, rinomina o
+  cancella una migration gia' presente in `develop`.
+- **Ogni tabella di `public` ha la RLS attiva**
+  (`ALTER TABLE public.<nome> ENABLE ROW LEVEL SECURITY;` nella migration che
+  la crea): il test `supabase/tests/rls_attiva_test.sql` fa fallire la CI se
+  ne manca una.
+- **Mai `supabase db reset` sul database remoto**: cancella tutto.
+- **Mai i dati finti (`seed.sql`) sul remoto**: il seed e' solo per il database
+  locale; `db push` non lo carica (non usare `--include-seed`).
+
+Se serve applicare a mano (per esempio perche' un deploy e' caduto), con la CLI
+**3.x o superiore** (`brew upgrade supabase`), da `develop` aggiornato e dopo
+`supabase link`:
+
+```bash
+supabase db push --remote --dry-run   # anteprima: elenca le migration da applicare
+supabase db push --remote             # le applica, chiedendo conferma
+```
+
+`--remote` e' obbligatorio: dalla CLI 3.x senza di esso il comando punta al
+database locale. In alternativa, da GitHub: Actions → **Deploy Supabase** →
+Run workflow (spuntando "applica" le applica davvero).
 
 ## Comandi utili
 
@@ -123,11 +193,32 @@ Sprint da 1–2 settimane, consegna entro i **primi di dicembre 2026**.
 
 - **CI** (`ci.yml`): su ogni PR verso `develop`/`main` controlla il nome del
   branch (`<tipo>/KCK-<n>-...`), formattazione, analisi statica, test con
-  coverage e build web. Una PR rossa non si mergia.
+  coverage e build web. Una PR rossa non si mergia. Sui push in `develop`/`main`
+  compila anche l'app Android (debug) e, se si tocca `supabase/`, esegue i test
+  del database e delle Edge Functions.
 - **Release settimanale** (`release.yml`): **ogni mercoledi'** apre in automatico
   la PR `develop → main`; un PM la approva e fa il merge (merge commit).
-- **CD** (`cd.yml`): a ogni merge su `main` pubblica l'app web su GitHub Pages
-  e produce un APK Android scaricabile dalla pagina del run.
+- **CD** (`cd.yml`): a ogni merge su `main` pubblica l'app web su GitHub Pages,
+  produce un APK Android (tra gli Artifacts del run) e lo allega a una GitHub
+  Release. Usa i *Secrets* di repository `SUPABASE_URL` e `SUPABASE_ANON_KEY`
+  (Settings → Secrets and variables → Actions → Secrets): senza, l'app
+  pubblicata mostra "Configurazione mancante".
+- **Deploy del database** (`db-deploy.yml`): a ogni merge in `develop` che tocca
+  `supabase/migrations/**` applica le migration al progetto Supabase `kickly`
+  (`supabase link` + `supabase db push --remote`, senza seed). La CI le prova
+  solo su un database locale usa e getta: questo workflow e' l'unico che scrive
+  sul database vero. Token e progetto stanno nell'*environment* `supabase-develop`
+  (Settings → Environments, deployment branch = solo `develop`): secret
+  `SUPABASE_ACCESS_TOKEN` e variable `SUPABASE_PROJECT_REF`. Si lancia anche a
+  mano da Actions → "Deploy Supabase" (di default solo anteprima). Il database
+  e' uno solo (il piano gratuito di Supabase non permette un secondo progetto
+  ne' il branching): lo aggiorna solo `develop`, la release su `main` non ha
+  nessun passo sul DB.
+- **Dependabot** (`dependabot.yml`): ogni lunedi' propone gli aggiornamenti
+  delle action e delle dipendenze Dart; come ogni PR servono CI verde e
+  approvazione di un PM.
+- **Versione di Flutter**: e' scritta nell'azione `.github/actions/setup-flutter`
+  (unico punto da cambiare per aggiornarla, insieme a questo README e ad AGENTS.md).
 - **Jira ↔ GitHub**: con l'app GitHub for Atlassian, branch, commit e PR che
   contengono la chiave del ticket (es. `KCK-60`) compaiono nel ticket Jira.
   - *Come Verificare*: dopo aver fatto 'git push', apri il ticket su Jira e controlla il pannello **Sviluppo** sulla destra. 

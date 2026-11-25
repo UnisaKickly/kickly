@@ -30,18 +30,20 @@ on:
 
 # Se fate due push di fila sulla stessa PR, il run vecchio viene annullato:
 # inutile sprecare minuti di CI su un commit gia' superato.
+# Sui push in `develop`/`main` NON si annulla nulla: ogni commit che entra nei
+# branch condivisi deve avere il suo esito completo (serve anche a capire quale
+# commit ha rotto la build).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Il workflow legge solo il codice: nessun permesso di scrittura.
 permissions:
   contents: read
 
-env:
-  # Versione di Flutter fissata: tutti (CI e team) devono usare la stessa,
-  # altrimenti formattazione e lint possono dare risultati diversi.
-  FLUTTER_VERSION: "3.47.0"
+# La versione di Flutter e' fissata in un solo posto: l'azione composita
+# .github/actions/setup-flutter (tutti, CI e team, devono usare la stessa,
+# altrimenti formattazione e lint possono dare risultati diversi).
 
 jobs:
   # Controlla che il branch della PR rispetti la regola del progetto
@@ -110,7 +112,9 @@ jobs:
           dirs=$(find lib/features -type d \( -name presentation -o -name domain \) 2>/dev/null || true)
           if [ -z "$dirs" ]; then echo "Nessuna cartella presentation/domain: niente da controllare."; exit 0; fi
           # shellcheck disable=SC2086
-          if grep -rnE "package:(supabase_flutter|supabase|firebase_[a-z_]+|flutter_stripe)/" $dirs; then
+          # Oltre a supabase_flutter, i sotto-pacchetti del client Supabase
+          # (gotrue, postgrest, ...) hanno gli stessi vincoli.
+          if grep -rnE "package:(supabase_flutter|supabase|gotrue|postgrest|realtime_client|storage_client|functions_client|firebase_[a-z_]+|flutter_stripe)/" $dirs; then
             echo "::error::DG9 violato: SDK esterni importati in presentation/domain. Usa un Repository nel livello data (vedi AGENTS.md)."
             exit 1
           fi
@@ -157,16 +161,9 @@ jobs:
       - name: Checkout del codice
         uses: actions/checkout@v7
 
-      - name: Installa Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          # Cache dell'SDK e dei pacchetti: le run successive sono piu' veloci.
-          cache: true
-
-      - name: Scarica le dipendenze
-        run: flutter pub get
+      # Installa Flutter (versione fissata) e fa `flutter pub get`.
+      - name: Prepara Flutter
+        uses: ./.github/actions/setup-flutter
 
       # In locale: `dart format .` (corregge da solo i file).
       - name: Controlla la formattazione
@@ -183,6 +180,9 @@ jobs:
       # Calcola la percentuale di righe coperte dai test leggendo lcov.info
       # (LF = righe trovate, LH = righe eseguite) e la scrive nel riepilogo
       # del run, visibile nella pagina del workflow su GitHub.
+      # Attenzione: `flutter test --coverage` conta SOLO i file che i test
+      # importano (direttamente o indirettamente). Un file mai importato da un
+      # test non compare nel totale e la percentuale risulta piu' alta del vero.
       - name: Riepilogo coverage
         run: |
           if [ -f coverage/lcov.info ]; then
@@ -190,6 +190,7 @@ jobs:
               END { pct = (lf > 0) ? lh*100/lf : 0;
                     printf "### Coverage dei test: %.1f%% (%d/%d righe)\n", pct, lh, lf }' \
               coverage/lcov.info >> "$GITHUB_STEP_SUMMARY"
+            echo "_Conta solo i file importati dai test: i file mai importati non compaiono nel totale._" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       # Salva il report di coverage come artifact scaricabile (utile per il
@@ -211,14 +212,198 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
-          cache: true
-
-      - run: flutter pub get
+      - name: Prepara Flutter
+        uses: ./.github/actions/setup-flutter
 
       # Verifica che l'app compili in modalita' release.
       - name: Compila l'app web
         run: flutter build web --release
+
+  # Compila anche l'app Android: senza questo job l'Android verrebbe compilato
+  # per la prima volta dal CD, il mercoledi' dopo il merge in `main`, e un
+  # plugin con requisiti Android (minSdk, Kotlin, Gradle) romperebbe il rilascio
+  # invece di una PR. Gira sui push in `develop`/`main` e a mano (non sulle PR:
+  # costa piu' del web e la PR di release aperta dal bot non lancia la CI).
+  # NON e' un controllo obbligatorio: se diventa rosso lo si vede in `develop`.
+  build-android:
+    name: Build Android (debug)
+    needs: analyze-and-test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Gradle (il sistema di build Android) richiede Java.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Prepara Flutter
+        uses: ./.github/actions/setup-flutter
+
+      # APK di debug: serve solo a verificare che Gradle compili.
+      - name: Compila l'APK di debug
+        run: flutter build apk --debug
+
+  # Rileva se il lavoro ha toccato `supabase/` (database ed Edge Functions).
+  # Il job `supabase` qui sotto parte solo in quel caso. Si usa un job con un
+  # `if:` e NON `paths:` sul trigger: un controllo che non parte mai lascerebbe
+  # una PR in attesa per sempre se un giorno venisse reso obbligatorio, mentre un
+  # job "skipped" conta come superato.
+  changes:
+    name: Rileva modifiche a supabase/
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      supabase: ${{ steps.filtro.outputs.supabase }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Confronta con la base
+        id: filtro
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # Nel dubbio (push iniziale, esecuzione a mano, storia non
+          # disponibile) si esegue il job: meglio un controllo in piu' che uno
+          # saltato per errore.
+          run=true
+          if [ "$EVENT" = "pull_request" ]; then
+            if git diff --quiet "origin/$BASE_REF...HEAD" -- supabase; then run=false; fi
+          elif [ "$EVENT" = "push" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            if git diff --quiet "$BEFORE" HEAD -- supabase; then run=false; fi
+          fi
+          echo "Modifiche in supabase/ da controllare: $run"
+          echo "supabase=$run" >> "$GITHUB_OUTPUT"
+
+  # Controlli su database ed Edge Functions (AGENTS.md: `supabase test db` e
+  # `deno test` quando si tocca `supabase/`). Niente di cio' esiste ancora
+  # (c'e' solo config.toml): i passi si attivano da soli quando compaiono
+  # migration, test pgTAP ed Edge Functions. NON e' un controllo obbligatorio
+  # finche' i PM non lo aggiungono alla regola del ruleset.
+  supabase:
+    name: Supabase e Edge Functions
+    needs: changes
+    if: needs.changes.outputs.supabase == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Serve la storia completa per confrontare le migration della PR con
+          # quelle gia' presenti nel branch di destinazione (passo qui sotto).
+          fetch-depth: 0
+
+      # Regole sulle migration (KCK-269), solo sulle PR. Dal merge in `develop`
+      # il workflow db-deploy.yml le applica al database vero, quindi un errore
+      # qui evita un deploy rosso dopo il merge:
+      #   - il nome del file e' `AAAAMMGGHHMMSS_nome.sql` (lo crea
+      #     `supabase migration new`: il prefisso e' la data e l'ora UTC);
+      #   - ogni migration NUOVA ha un timestamp piu' recente di tutte quelle
+      #     gia' nel branch di destinazione: altrimenti la CLI si rifiuta di
+      #     applicarla (e' il caso di una PR rimasta aperta a lungo);
+      #   - le migration GIA' nel branch non si modificano, rinominano o
+      #     cancellano: sono gia' state applicate al DB, una correzione si fa
+      #     con una migration nuova.
+      - name: Controlla le regole sulle migration
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          base="origin/$BASE_REF"
+
+          # Timestamp piu' recente tra le migration gia' nel branch di
+          # destinazione ("0" se non ce n'e' ancora nessuna).
+          ultima=$(git ls-tree -r --name-only "$base" -- supabase/migrations \
+            | sed 's#.*/##' | grep -oE '^[0-9]{14}' | sort | tail -1 || true)
+          ultima=${ultima:-0}
+          echo "Ultima migration gia' in $BASE_REF: $ultima"
+
+          errori=0
+          # Solo le modifiche della PR (tre punti: dal punto di partenza del
+          # branch). Il separatore e' il tab; per i rename ci sono due percorsi.
+          while IFS=$'\t' read -r stato percorso nuovo; do
+            [ -z "$stato" ] && continue
+            case "$stato" in
+              A)
+                nome=$(basename "$percorso")
+                if ! echo "$nome" | grep -qE '^[0-9]{14}_[a-z0-9_]+\.sql$'; then
+                  echo "::error file=$percorso::Nome non valido: usa 'supabase migration new <nome>' (formato AAAAMMGGHHMMSS_nome.sql, minuscolo)."
+                  errori=1
+                  continue
+                fi
+                ts=${nome:0:14}
+                if [[ ! "$ts" > "$ultima" ]]; then
+                  echo "::error file=$percorso::Il timestamp $ts non e' successivo all'ultima migration gia' in $BASE_REF ($ultima): la CLI la rifiuterebbe al deploy. Rinomina il file con un timestamp nuovo (crea un file con 'supabase migration new' e copiaci il contenuto)."
+                  errori=1
+                fi
+                ;;
+              M|D|R*)
+                echo "::error file=$percorso::Una migration gia' in $BASE_REF non si modifica, rinomina o cancella (stato $stato): e' gia' stata applicata al database. Scrivi una migration nuova per la correzione."
+                errori=1
+                ;;
+            esac
+          done < <(git diff --name-status "$base...HEAD" -- supabase/migrations)
+
+          if [ "$errori" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Migration della PR in regola."
+
+      - name: Controlla cosa c'e' da verificare
+        id: cosa
+        run: |
+          [ -n "$(ls supabase/migrations/*.sql 2>/dev/null)" ] && echo "db=true" >> "$GITHUB_OUTPUT" || echo "db=false" >> "$GITHUB_OUTPUT"
+          [ -n "$(ls supabase/tests/*.sql supabase/tests/**/*.sql 2>/dev/null)" ] && echo "pgtap=true" >> "$GITHUB_OUTPUT" || echo "pgtap=false" >> "$GITHUB_OUTPUT"
+          [ -n "$(find supabase/functions -name '*.ts' 2>/dev/null | head -1)" ] && echo "deno=true" >> "$GITHUB_OUTPUT" || echo "deno=false" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      # Database: applica tutte le migration su un Postgres locale e lancia i
+      # test pgTAP (RLS comprese).
+      # Versione fissata, la stessa di db-deploy.yml, e non `latest`: la 3.x ha
+      # cambiato in silenzio il comportamento di `db push` (senza `--remote`
+      # punta al DB locale), un salto di versione non deve cambiare la CI senza
+      # che ce ne accorgiamo. Per aggiornarla si cambia in entrambi i workflow.
+      - name: Installa la CLI di Supabase
+        if: steps.cosa.outputs.db == 'true'
+        uses: supabase/setup-cli@v3
+        with:
+          version: 3.2.0
+
+      - name: Avvia Supabase in locale e applica le migration
+        if: steps.cosa.outputs.db == 'true'
+        run: |
+          supabase start
+          supabase db reset
+
+      - name: Test del database
+        if: steps.cosa.outputs.db == 'true' && steps.cosa.outputs.pgtap == 'true'
+        run: supabase test db
+
+      # Edge Functions (TypeScript/Deno).
+      - name: Installa Deno
+        if: steps.cosa.outputs.deno == 'true'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Un `deno test` per ogni funzione (come in AGENTS.md), saltando le
+      # cartelle di codice condiviso che iniziano con "_" (es. `_shared`).
+      # `--permit-no-files` (e non `--permit-no-tests`, che Deno 2 non conosce)
+      # evita il fallimento per una funzione ancora senza file di test (KCK-273).
+      - name: Test delle Edge Functions
+        if: steps.cosa.outputs.deno == 'true'
+        run: |
+          for dir in supabase/functions/*/; do
+            case "$(basename "$dir")" in _*) continue ;; esac
+            echo "::group::deno test $dir"
+            deno test --permit-no-files --allow-env --allow-net "$dir"
+            echo "::endgroup::"
+          done

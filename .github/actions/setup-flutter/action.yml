@@ -1,0 +1,37 @@
+# =============================================================================
+# Azione composita: prepara Flutter e scarica le dipendenze
+# =============================================================================
+# Usata da CI, CD e Copilot Setup Steps, cosi' la versione di Flutter e' scritta
+# in UN solo posto (qui sotto, `default`). Quando si aggiorna Flutter si cambia
+# solo questo file (e si aggiornano README.md e AGENTS.md, che la citano).
+#
+# Prerequisito: il chiamante ha gia' fatto `actions/checkout`, altrimenti
+# `flutter pub get` non trova il pubspec.yaml.
+#
+# `subosito/flutter-action` e' di terze parti: lo fissiamo a uno SHA preciso
+# (il commento dice a quale tag corrisponde) cosi' un tag spostato non puo'
+# cambiare il codice che gira nella nostra pipeline. Dependabot (vedi
+# .github/dependabot.yml) propone gli aggiornamenti dello SHA.
+name: Prepara Flutter
+description: Installa Flutter (versione fissata del progetto) e scarica le dipendenze.
+
+inputs:
+  flutter-version:
+    description: Versione di Flutter da installare.
+    required: false
+    default: "3.47.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Installa Flutter
+      uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      with:
+        flutter-version: ${{ inputs.flutter-version }}
+        channel: stable
+        # Cache dell'SDK e dei pacchetti: le run successive sono piu' veloci.
+        cache: true
+
+    - name: Scarica le dipendenze
+      shell: bash
+      run: flutter pub get
