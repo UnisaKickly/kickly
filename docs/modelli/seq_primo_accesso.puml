@@ -1,8 +1,13 @@
 ' Sequence diagram SD_UC_ACC_1 (Primo accesso giocatore).
-' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 50 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Ricavato dal RAD v2.9, sezione 3.4.5, pag. 50 di docs/fonti/Kickly_RAD_v2.9.pdf, e corretto
+' il 27/11/2026 secondo la checklist Sequence del RAD (punti 4, 6, 13, 15, 18-20):
+' - il control RegistrazioneControl e' il terzo elemento, subito dopo il boundary iniziale;
+' - Account e Giocatore sono un solo oggetto Giocatore (Giocatore e' una specializzazione di
+'   Account), creato con <<create>> quando il sistema crea l'account (UC_ACC_1 passo 4); la
+'   scelta del ruolo (passo 7) aggiorna lo stesso oggetto con aggiornaDati(ruolo);
+' - ogni messaggio ricevuto apre un box di attivazione, il control resta attivo per tutto il flusso.
 ' Serve a fissare l'ordine delle chiamate di registrazione, onboarding e configurazione
 ' della Player Card, da cui si ricavano le firme dei metodi di RegistrazioneControl.
-' Nomi, messaggi e ordine sono quelli del RAD: non correggere qui, segnalare nel ticket.
 @startuml SD_UC_ACC_1
 title SD_UC_ACC_1 (Primo accesso giocatore)
 autonumber
@@ -10,31 +15,45 @@ skinparam sequenceMessageAlign left
 
 actor "Utente non\nregistrato" as Utente
 boundary FormRegistrazione
+control RegistrazioneControl
 boundary FormOnboarding
 boundary FormPlayerCard
 boundary Dashboard
-control RegistrazioneControl
-entity Account
 
-' Registrazione: dati anagrafici e creazione dell'Account
+' Registrazione: dati anagrafici e creazione dell'account (oggetto Giocatore)
 Utente -> FormRegistrazione : seleziona Registrati
+activate FormRegistrazione
 FormRegistrazione -> RegistrazioneControl : richiediModulo()
+activate RegistrazioneControl
 RegistrazioneControl --> FormRegistrazione : mostraModulo()
 Utente -> FormRegistrazione : inserisceDati()
 FormRegistrazione -> RegistrazioneControl : registra(dati)
-RegistrazioneControl -> Account : create(dati)
+create entity Giocatore
+RegistrazioneControl -> Giocatore : <<create>>(dati)
+activate Giocatore
+deactivate FormRegistrazione
 
-' Onboarding: scelta del ruolo e creazione del Giocatore
+' Onboarding: scelta del ruolo, registrata sullo stesso oggetto
 RegistrazioneControl -> FormOnboarding : avviaOnboarding()
+deactivate Giocatore
+activate FormOnboarding
 Utente -> FormOnboarding : selezionaRuolo()
 FormOnboarding -> RegistrazioneControl : confermaRuolo()
-create entity Giocatore
-RegistrazioneControl -> Giocatore : create()
+RegistrazioneControl -> Giocatore : aggiornaDati(ruolo)
+activate Giocatore
+deactivate Giocatore
+deactivate FormOnboarding
 
 ' Configurazione della Player Card e accesso alla Dashboard
 RegistrazioneControl -> FormPlayerCard : mostraConfigurazione()
+activate FormPlayerCard
 Utente -> FormPlayerCard : inserisceDatiPlayerCard()
 FormPlayerCard -> RegistrazioneControl : salvaPlayerCard()
 RegistrazioneControl -> Giocatore : aggiornaDati()
+activate Giocatore
+deactivate Giocatore
+deactivate FormPlayerCard
 RegistrazioneControl -> Dashboard : mostraDashboard()
+activate Dashboard
+deactivate RegistrazioneControl
 @enduml

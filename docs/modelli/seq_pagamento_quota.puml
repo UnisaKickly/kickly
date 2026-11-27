@@ -1,9 +1,13 @@
 ' Sequence diagram SD_UC_PAG_1 (Pagamento della quota).
-' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 51 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Ricavato dal RAD v2.9, sezione 3.4.5, pag. 51 di docs/fonti/Kickly_RAD_v2.9.pdf, e corretto
+' il 27/11/2026 secondo la checklist Sequence del RAD (punti 6, 13, 15, 18-20):
+' - le Transazioni non esistono prima del flusso: sono create con <<create>> nel punto in cui
+'   nascono; sono due istanze distinte, il versamento del Giocatore e l'accredito al Gestore;
+' - ogni messaggio ricevuto apre un box di attivazione, che si chiude sul messaggio di ritorno;
+'   il control resta attivo per tutto il flusso.
 ' Serve a fissare l'ordine delle chiamate del pagamento della quota, della conferma
 ' della prenotazione e dell'accredito al gestore, da cui si ricavano le firme dei
 ' metodi di GestioneTransazioniControl.
-' Nomi, messaggi e ordine sono quelli del RAD: non correggere qui, segnalare nel ticket.
 @startuml SD_UC_PAG_1
 title SD_UC_PAG_1 (Pagamento della quota)
 autonumber
@@ -13,15 +17,18 @@ actor Giocatore
 boundary InterfacciaPagamento
 control GestioneTransazioniControl
 entity Quota
-entity Transazione
 boundary GatewayPagamenti
 actor "Gestore\ndel Campo" as GestoreDelCampo
 
 ' Riepilogo della quota da versare
 Giocatore -> InterfacciaPagamento : selezionaPagaQuota()
+activate InterfacciaPagamento
 InterfacciaPagamento -> GestioneTransazioniControl : richiediRiepilogo()
+activate GestioneTransazioniControl
 GestioneTransazioniControl -> Quota : leggiQuota()
+activate Quota
 Quota --> GestioneTransazioniControl : datiQuota
+deactivate Quota
 GestioneTransazioniControl --> InterfacciaPagamento : riepilogo()
 InterfacciaPagamento --> Giocatore : mostraRiepilogo()
 
@@ -29,19 +36,35 @@ InterfacciaPagamento --> Giocatore : mostraRiepilogo()
 Giocatore -> InterfacciaPagamento : confermaPagamento()
 InterfacciaPagamento -> GestioneTransazioniControl : avviaPagamento()
 GestioneTransazioniControl -> GatewayPagamenti : richiediPagamento()
+activate GatewayPagamenti
 Giocatore -> GatewayPagamenti : completaPagamento()
 GatewayPagamenti --> GestioneTransazioniControl : esitoPositivo
+deactivate GatewayPagamenti
 GestioneTransazioniControl -> Quota : registraVersamento()
-GestioneTransazioniControl -> Transazione : creaTransazione()
+activate Quota
+deactivate Quota
+create entity "versamento:Transazione" as Versamento
+GestioneTransazioniControl -> Versamento : <<create>>\ncreaTransazione()
+activate Versamento
 GestioneTransazioniControl --> InterfacciaPagamento : versamentoRegistrato()
+deactivate Versamento
 InterfacciaPagamento --> Giocatore : mostraConferma()
 
 ' Conferma della prenotazione, accredito al gestore e notifica
 GestioneTransazioniControl -> GestioneTransazioniControl : confermaPrenotazione()
+activate GestioneTransazioniControl
+deactivate GestioneTransazioniControl
 GestioneTransazioniControl -> GatewayPagamenti : disponiAccredito()
+activate GatewayPagamenti
 GatewayPagamenti --> GestioneTransazioniControl : esitoAccredito
-GestioneTransazioniControl -> Transazione : creaTransazione()
+deactivate GatewayPagamenti
+create entity "accredito:Transazione" as Accredito
+GestioneTransazioniControl -> Accredito : <<create>>\ncreaTransazione()
+activate Accredito
 GestioneTransazioniControl --> InterfacciaPagamento : partitaConfermata
+deactivate Accredito
 InterfacciaPagamento --> Giocatore : mostraPartitaConfermata()
+deactivate InterfacciaPagamento
 GestioneTransazioniControl -> GestoreDelCampo : notificaConferma()
+deactivate GestioneTransazioniControl
 @enduml

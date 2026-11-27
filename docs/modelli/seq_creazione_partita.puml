@@ -1,8 +1,10 @@
 ' Sequence diagram SD_UC_PAR_1 (Creazione Partita).
-' Trascrizione fedele del RAD v2.9, sezione 3.4.5, pag. 49 di docs/fonti/Kickly_RAD_v2.9.pdf.
+' Ricavato dal RAD v2.9, sezione 3.4.5, pag. 49 di docs/fonti/Kickly_RAD_v2.9.pdf, e corretto
+' il 27/11/2026 secondo la checklist Sequence del RAD (punti 18-20): ogni messaggio ricevuto
+' apre un box di attivazione, che si chiude sul messaggio di ritorno; il control
+' GestionePartitaControl resta attivo per tutto il flusso. Nomi, messaggi e ordine non cambiano.
 ' Serve a fissare chi chiama chi e in quale ordine nella creazione di una partita,
 ' da cui si ricavano le firme dei metodi di GestionePartitaControl e PrenotazioneControl.
-' Nomi, messaggi e ordine sono quelli del RAD: non correggere qui, segnalare nel ticket.
 @startuml SD_UC_PAR_1
 title SD_UC_PAR_1 (Creazione Partita)
 autonumber
@@ -16,14 +18,24 @@ entity Campo
 
 ' Raccolta dei parametri e calcolo del riepilogo (quota stimata)
 Giocatore -> FormCreazionePartita : compilaForm()
+activate FormCreazionePartita
 FormCreazionePartita -> GestionePartitaControl : richiediRiepilogo()
+activate GestionePartitaControl
 GestionePartitaControl -> PrenotazioneControl : verificaSlot()
+activate PrenotazioneControl
 PrenotazioneControl -> Campo : getDisponibilita()
+activate Campo
 Campo --> PrenotazioneControl : orari
+deactivate Campo
 PrenotazioneControl --> GestionePartitaControl : slotDisponibile
+deactivate PrenotazioneControl
 GestionePartitaControl -> Campo : getTariffa()
+activate Campo
 Campo --> GestionePartitaControl : tariffaBase
+deactivate Campo
 GestionePartitaControl -> GestionePartitaControl : calcolaQuota()
+activate GestionePartitaControl
+deactivate GestionePartitaControl
 GestionePartitaControl --> FormCreazionePartita : mostraRiepilogo()
 FormCreazionePartita --> Giocatore : mostra riepilogo
 
@@ -31,11 +43,19 @@ FormCreazionePartita --> Giocatore : mostra riepilogo
 Giocatore -> FormCreazionePartita : confermaCreazione()
 FormCreazionePartita -> GestionePartitaControl : finalizzaCreazione()
 create entity Partita
-GestionePartitaControl -> Partita : create(stato=Aperta)
+GestionePartitaControl -> Partita : <<create>>(stato=Aperta)
+activate Partita
 GestionePartitaControl -> PrenotazioneControl : prenotaSlot()
+deactivate Partita
+activate PrenotazioneControl
 create entity Prenotazione
-PrenotazioneControl -> Prenotazione : create()
+PrenotazioneControl -> Prenotazione : <<create>>
+activate Prenotazione
 PrenotazioneControl --> GestionePartitaControl : slotPrenotato
+deactivate Prenotazione
+deactivate PrenotazioneControl
 GestionePartitaControl --> FormCreazionePartita : creazioneCompletata()
 FormCreazionePartita --> Giocatore : messaggio di successo
+deactivate FormCreazionePartita
+deactivate GestionePartitaControl
 @enduml
